@@ -1,0 +1,59 @@
+You are a precise document assistant. Answer the user's question ONLY using the context provided below. Do NOT use your general training knowledge. If the answer cannot be found in the context, respond with: 'I could not find the answer in the uploaded document. Please make sure the document contains relevant information.'
+
+STRICT FILTERING RULES (follow these exactly):
+- If the user asks about a specific region, district, city, branch, zone, category, or any named entity, look at the corresponding column in the table. If the database categorizes a row under the requested entity (for example, the REGION_NAME column is 'NAGAPATTINAM'), you MUST include it, even if other columns (like LOCATION) mention another name (like PONDICHERRY or TANJORE).
+- Do NOT include data where the category column itself does not match the user's request.
+- Do NOT mention or reference data from unrelated regions. Show only what was explicitly asked for.
+- FOLLOW-UP QUESTIONS: If the user's latest question uses pronouns (e.g., 'these', 'those', 'them', 'it') or implies a continuation (e.g., 'what about...', 'list them'), you MUST resolve what they are referring to by looking at the previous conversation turns. Treat their current question as if it explicitly contained the entities mentioned in the previous turns.
+
+RULES FOR TABULAR DATA / SPREADSHEETS:
+- Verify every row — do not overlook any.
+- List EVERY matching row. Do NOT skip or truncate.
+- CRITICAL: If the user uses a pronoun like 'these', 'them', or 'those', you MUST infer the specific entity (region, status, branch) from the previous conversation and STRICTLY filter the rows to only include those matching the exact same entity. Do NOT list the entire table.
+- OUTPUT FORMAT: Respond with a markdown table. Use these column headers:
+  | ATM ID | Location | Status | Reason |
+  | --- | --- | --- | --- |
+  Fill in values from the context rows. After the table, write one sentence:
+  'There are 37 non-working ATMs in the region.'
+
+=== DOCUMENT CONTEXT ===
+| BANKATMID | REGION_CODE | REGION_NAME | BRANCH_NUM | LOCATION | Status@310526-2001 | WORKING or NOT | STATUS | CONNECTIVITY |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| IOBC2022 | 3934 | NAGAPATTINAM | 2832 | AZHIYUR NAGAPATTINAM | Lowcash,Dispenser block,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC9625 | 3934 | NAGAPATTINAM | 3547 | LAKSHMANGUDI | Lowcash,Dispenser block,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC2059 | 3934 | NAGAPATTINAM | 1197 | SENNIAR STREET VALANGAI | Lowcash,ServiceOUT | NOT-WORKING | ServiceOUT | Connected |
+| IOBC8956 | 3934 | NAGAPATTINAM | 896 | MANNARGUDI | ServiceOUT,Card Reader Problem,Dispenser block,Cassette Type-4 is in Fatal Error | NOT-WORKING | ServiceOUT | Connected |
+| IOBC8047 | 3934 | NAGAPATTINAM | 2798 | ELAVANKARGUDI TANJORE | ServiceOUT,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | ServiceOUT | Connected |
+| IOBC2142 | 3934 | NAGAPATTINAM | 45 | KUTTALOAM OFFSITE | ServiceOUT,Disconnected,Superviser mode,Dispenser block,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out,Type-3 Cassette Cash is in Out,Dispense count exeed | NOT-WORKING | ServiceOUT | Disconnected |
+| IOBC8037 | 3934 | NAGAPATTINAM | 2334 | SEMBANARKOIL PONDICHERR | Dispenser block,Cassette Type-4 is in Fatal Error | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC8038 | 3934 | NAGAPATTINAM | 2797 | BAZAR STREET | Lowcash,Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC3132 | 3934 | NAGAPATTINAM | 244 | VELANGANNI | Lowcash,ServiceOUT,Dispenser block,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | ServiceOUT | Connected |
+| IOBC1461 | 3934 | NAGAPATTINAM | 591 | THEREZHENDUR PONDICHERR | Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC1463 | 3934 | NAGAPATTINAM | 2580 | THITTACHERRY PONDI | ServiceOUT,Receipt Paper Error,Card Reader Problem,Dispenser block,Cassette Type-4 is in Fatal Error | NOT-WORKING | ServiceOUT | Connected |
+| IOBC1495 | 3934 | NAGAPATTINAM | 1076 | AYAKARANPULAM PONDICHER | Dispenser block,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC2165 | 3934 | NAGAPATTINAM | 1049 | KANKALANCHERRY | Lowcash,Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC1449 | 3934 | NAGAPATTINAM | 228 | AKKUR PONDICHERRY | ServiceOUT,Disconnected,Cassette Type-4 is in Fatal Error | NOT-WORKING | ServiceOUT | Disconnected |
+| IOBC1453 | 3934 | NAGAPATTINAM | 2833 | KOLLIDAM PONDICHERRY | Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC1504 | 3934 | NAGAPATTINAM | 1269 | PAKKAM KOTTUR | ServiceOUT,Disconnected,Dispenser block,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out,Type-3 Cassette Cash is in Out | NOT-WORKING | ServiceOUT | Disconnected |
+| IOBC1505 | 3934 | NAGAPATTINAM | 2830 | PORAIYARU | ServiceOUT,Disconnected,Superviser mode,Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out,Type-3 Cassette Cash is in Out | NOT-WORKING | ServiceOUT | Disconnected |
+| IOBC1538 | 3934 | NAGAPATTINAM | 706 | NAGORE PUDUCHERRY | Lowcash,Dispenser block,Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC1826 | 3934 | NAGAPATTINAM | 1092 | EDAMELAIYUR TANJORE | Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC3143 | 3934 | NAGAPATTINAM | 2334 | SEMBANARKOIL | ServiceOUT,Disconnected,Superviser mode,Dispenser block,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out,Type-3 Cassette Cash is in Out | NOT-WORKING | ServiceOUT | Disconnected |
+| IOBC3163 | 3934 | NAGAPATTINAM | 229 | MANALMEDU | Lowcash,Dispenser block,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC3309 | 3934 | NAGAPATTINAM | 2795 | AVOOR | ServiceOUT,Disconnected,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | ServiceOUT | Disconnected |
+| IOBC3349 | 3934 | NAGAPATTINAM | 3255 | THIRUMAKOTTAI | Dispenser block,Cassette Type-4 is in Fatal Error | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC3418 | 3934 | NAGAPATTINAM | 62 | NAGAPATTINAM | ServiceOUT,Disconnected,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | ServiceOUT | Disconnected |
+| IOBC3485 | 3934 | NAGAPATTINAM | 83 | SIRKALI-CHIDAMBARAM ROA | ServiceOUT,Disconnected,Receipt Paper Error,Dispenser block,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | ServiceOUT | Disconnected |
+| IOBC3497 | 3934 | NAGAPATTINAM | 896 | MANNARGUDI THALUK OFFIC | Dispenser block,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC3503 | 3934 | NAGAPATTINAM | 2883 | VILAMAL-TIRUVARUR | ServiceOUT,Disconnected,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error | NOT-WORKING | ServiceOUT | Disconnected |
+| IOBC3540 | 3934 | NAGAPATTINAM | 750 | THIRUVAVADUTHURAI | Dispenser block,Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC8013 | 3934 | NAGAPATTINAM | 57 | MAYILADUTHURAI PONDICHE | Lowcash,Dispenser block,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC8014 | 3934 | NAGAPATTINAM | 62 | NAGAPATTINAM PONDICHERR | ServiceOUT,Receipt Paper Error,Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out,Type-3 Cassette Cash is in Out | NOT-WORKING | ServiceOUT | Connected |
+| IOBC8021 | 3934 | NAGAPATTINAM | 279 | KAVERIPOOMPATTINAM | Dispenser block,Cassette Type-4 is in Fatal Error | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC8025 | 3934 | NAGAPATTINAM | 795 | KILIYANUR | Lowcash,Receipt Paper Error,Dispenser block,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC8027 | 3934 | NAGAPATTINAM | 1232 | VILUNDAMAVADI | Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out,Type-3 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBC8957 | 3934 | NAGAPATTINAM | 97 | THIRUVARUR | ServiceOUT,Disconnected,Superviser mode,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-3 Cassette Cash is in Out | NOT-WORKING | ServiceOUT | Disconnected |
+| IOBD4106 | 3934 | NAGAPATTINAM | 2334 | NEHRUJI SALAI | Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error | NOT-WORKING | IN-SERVICE | Connected |
+| IOBD5079 | 3934 | NAGAPATTINAM | 83 | SIRKALI PONDICHERRY | Lowcash,Receipt Paper Error,Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error,Type-2 Cassette Cash is in Out | NOT-WORKING | IN-SERVICE | Connected |
+| IOBD7102 | 3934 | NAGAPATTINAM | 972 | ADIYAKKAMANGALAM-BUSSTAND | Lowcash,Cassette Type-2 is in Fatal Error,Cassette Type-3 is in Fatal Error,Cassette Type-4 is in Fatal Error | NOT-WORKING | IN-SERVICE | Connected |
+=== END CONTEXT ===

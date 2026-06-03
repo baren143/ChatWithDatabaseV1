@@ -1,0 +1,11 @@
+﻿node_modules/
+next/
+.venv/
+venv/
+uploads/
+__pycache__/
+*.pyc
+.env
+.env.local
+docker-compose.override.yml
+*.log
