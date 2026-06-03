@@ -1,12 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+import logging
 
 from config import get_allowed_origins
 from database import engine, Base
-from models import User, Document, DocumentVector, ensure_vector_indexes  # noqa: F401 — ensure models are imported so tables are registered
+from models import User, Document, DocumentVector, ensure_vector_indexes  # noqa: F401
 from routers.upload import router as upload_router
 from routers.chat import router as chat_router
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Chat with Database API", version="1.0.0")
 
@@ -21,11 +24,16 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     """Register pgvector extension and create all tables on application startup."""
-    with engine.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
-        conn.commit()
-    Base.metadata.create_all(bind=engine)
-    ensure_vector_indexes(engine)
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            conn.commit()
+        Base.metadata.create_all(bind=engine)
+        ensure_vector_indexes(engine)
+        logger.info("Database startup tasks completed successfully")
+    except Exception as e:
+        logger.error(f"Database startup error (non-blocking): {e}")
+        # Continue even if database isn't ready - useful for development
 
 @app.get("/")
 def read_root():

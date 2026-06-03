@@ -1,5 +1,9 @@
 import os
+from dotenv import load_dotenv
 from celery import Celery
+
+# Load environment variables from .env file
+load_dotenv()
 
 broker_url = os.getenv("REDIS_URL")
 if not broker_url:

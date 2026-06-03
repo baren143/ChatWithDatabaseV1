@@ -1,0 +1,54 @@
+# Multi-stage production build for FastAPI + Celery backend
+# This Dockerfile can serve both the FastAPI server and Celery worker
+# depending on the command passed to docker run/compose
+
+# Stage 1: Build dependencies
+FROM python:3.11-slim as builder
+
+WORKDIR /tmp
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and build wheels
+COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel && \
+    pip wheel --no-cache-dir --timeout=100 -r requirements.txt --wheel-dir /tmp/wheels
+
+# Stage 2: Runtime environment
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install only runtime dependencies (curl for healthcheck)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy wheels from builder stage
+COPY --from=builder /tmp/wheels /tmp/wheels
+COPY requirements.txt .
+
+# Install Python dependencies from wheels (faster, no compilation)
+RUN pip install --upgrade pip && \
+    pip install --no-cache /tmp/wheels/* && \
+    rm -rf /tmp/wheels
+
+# Copy application code
+COPY . .
+
+# Create non-root user for security
+RUN useradd --create-home --shell /sbin/nologin appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
+# Expose port for FastAPI server
+EXPOSE 8000
+
+# Default command - can be overridden in docker-compose
+# For FastAPI: uvicorn main:app --host 0.0.0.0 --port 8000
+# For Celery: celery -A celery_app worker --loglevel=info
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]

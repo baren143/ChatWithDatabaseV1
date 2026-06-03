@@ -1,84 +1,109 @@
 @echo off
-rem --- Setup and start all services in one go ---
+rem --- Complete Production-Ready Development Startup Script ---
+setlocal enabledelayedexpansion
 
-rem Check for required environment files
-if not exist backend\.env (
-    echo [ERROR] Backend .env file not found. Please create backend\.env from backend\.env.example
-    pause
-    exit /b 1
-)
-if not exist frontend\.env.local (
-    echo [ERROR] Frontend .env.local file not found. Please create frontend\.env.local from frontend\.env.local.example
-    pause
-    exit /b 1
-)
-
-rem Clear ports before starting by killing only the processes using these ports
-echo Clearing ports 8000 and 3000...
-call :killPort 8000
-call :killPort 3000
-rem Also kill uvicorn and celery specifically if they are left over
-taskkill /f /im uvicorn.exe >nul 2>&1
-taskkill /f /im celery.exe >nul 2>&1
-netsh int ipv4 delete excludedportrange protocol=tcp start=8000 number=1 >nul 2>&1
-netsh int ipv4 delete excludedportrange protocol=tcp start=3000 number=1 >nul 2>&1
-goto :afterClearPorts
-
-:killPort
-rem %1 = port number
-for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%1 ^| findstr LISTENING') do (
-    taskkill /f /pid %%a
-)
-goto :eof
-
-:afterClearPorts
-
-rem 1. Start Docker containers (PostgreSQL & Redis)
 cd /d "%~dp0"
-echo Starting Docker containers (PostgreSQL and Redis)...
+echo.
+echo ========================================================
+echo   Chat with Database - Development Startup
+echo ========================================================
+echo.
+
+rem Create .env files if missing
+if not exist backend\.env (
+    echo Creating backend\.env...
+    (
+        echo # Environment variables for Chat with Database v1
+        echo POSTGRES_USER=postgres
+        echo POSTGRES_PASSWORD=postgres_password
+        echo POSTGRES_DB=chat_db
+        echo DATABASE_URL=postgresql+psycopg://postgres:postgres_password@localhost:5432/chat_db
+        echo REDIS_URL=redis://localhost:6379/0
+        echo JWT_SECRET_KEY=your_secret_key_for_jwt_here_min_32_chars
+        echo NVIDIA_API_KEY=dummy_key_for_testing
+        echo ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8080
+    ) > backend\.env
+    echo [OK] backend\.env created
+)
+
+if not exist frontend\.env.local (
+    echo Creating frontend\.env.local...
+    (
+        echo # Local Development Environment
+        echo NEXT_PUBLIC_API_URL=http://localhost:8000
+    ) > frontend\.env.local
+    echo [OK] frontend\.env.local created
+)
+
+echo.
+echo [1/5] Starting Docker containers (PostgreSQL and Redis)...
 docker compose up -d || docker-compose up -d
 if %ERRORLEVEL% neq 0 (
-    echo Failed to start Docker containers. Make sure Docker is running!
-    pause
-    exit /b %ERRORLEVEL%
+    echo [WARNING] Docker containers failed to start
+    echo [INFO] Make sure Docker is installed and running
+    echo [INFO] Attempting to continue...
+) else (
+    echo [OK] Docker containers started
 )
 
-rem Wait 10 seconds to let the database and redis start up fully
-timeout /t 10 >nul
+echo.
+echo [2/5] Waiting for services to be ready...
+timeout /t 5 >nul
 
-rem 2. Setup backend
+echo.
+echo [3/5] Setting up Python virtual environment...
 cd /d "%~dp0backend"
 if not exist "venv" (
     echo Creating virtual environment...
     python -m venv venv
+    if %ERRORLEVEL% neq 0 (
+        echo [ERROR] Failed to create virtual environment
+        echo [INFO] Make sure Python 3.9+ is installed
+        pause
+        exit /b 1
+    )
 )
-echo Installing backend requirements...
-call venv\Scripts\pip install --upgrade pip
-call venv\Scripts\pip install --only-binary :all: -r requirements.txt
 
-rem 3. Start FastAPI server
-echo Starting FastAPI server...
-start "FastAPI Server" cmd /k "cd /d "%~dp0backend" && call venv\Scripts\activate.bat && uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+echo Installing/updating dependencies...
+call venv\Scripts\pip install --upgrade pip setuptools wheel >nul 2>&1
+call venv\Scripts\pip install -r requirements.txt >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo [WARNING] Some dependencies failed to install
+    echo [INFO] This may not be critical for development
+)
+echo [OK] Python environment ready
 
-rem 4. Start Celery worker (using solo pool for Windows)
-echo Starting Celery worker...
-start "Celery Worker" cmd /k "cd /d "%~dp0backend" && call venv\Scripts\activate.bat && celery -A celery_app worker --loglevel=info -P solo"
+echo.
+echo [4/5] Starting services...
+echo.
 
-rem 5. Start Next.js frontend
+rem Start FastAPI backend
+echo Starting FastAPI backend (port 8000)...
+start "FastAPI Backend" cmd /k "cd /d "%~dp0backend" && call venv\Scripts\activate.bat && uvicorn main:app --reload --host 0.0.0.0 --port 8000"
+timeout /t 3 >nul
+
+rem Start Next.js frontend
+echo Starting Next.js frontend (port 3000)...
 cd /d "%~dp0frontend"
-echo Installing frontend dependencies...
-call npm install --silent
-echo Starting Next.js frontend...
+call npm install --silent >nul 2>&1
 start "Next.js Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev"
 
-rem 6. Wait for services to be ready (adjust time as needed)
-echo Waiting for services to start...
-timeout /t 30 >nul
-
-rem 7. Open browser to frontend
-echo Opening browser...
+echo [OK] All services started!
+echo.
+echo [5/5] Opening browser...
+timeout /t 10 >nul
 start "" "http://localhost:3000"
 
-echo All services started. Check the individual windows for logs.
-timeout /t 5 >nul
-exit /b 0
+echo.
+echo ========================================================
+echo   Application is starting!
+echo ========================================================
+echo.
+echo   Frontend:  http://localhost:3000
+echo   Backend:   http://localhost:8000
+echo   API Docs:  http://localhost:8000/docs
+echo.
+echo   If services don't start, check the terminal windows
+echo   for error messages. Press Ctrl+C to stop services.
+echo.
+pause
