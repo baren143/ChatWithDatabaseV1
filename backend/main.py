@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 
 from database import engine, Base
-from models import User, Document, DocumentVector  # noqa: F401 — ensure models are imported so tables are registered
+from models import User, Document, DocumentVector, ensure_vector_indexes  # noqa: F401 — ensure models are imported so tables are registered
 from routers.upload import router as upload_router
 from routers.chat import router as chat_router
 
@@ -30,6 +30,7 @@ def on_startup():
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
         conn.commit()
     Base.metadata.create_all(bind=engine)
+    ensure_vector_indexes(engine)
 
 @app.get("/")
 def read_root():

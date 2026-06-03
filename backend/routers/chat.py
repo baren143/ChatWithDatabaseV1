@@ -8,20 +8,115 @@ streams the LLM response back to the client.
 
 import os
 import re
-from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, Request
+from dataclasses import dataclass
+from typing import Any, Dict, Iterator, List, Optional
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
+from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 
-from database import get_db
+from database import SessionLocal
 from models import DocumentVector
 from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings, ChatNVIDIA
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from pydantic import BaseModel
-from dependencies import get_current_user_id
+from dependencies import resolve_user_id
 
 router = APIRouter(prefix="/api", tags=["chat"])
+
+VECTOR_TOP_K = 5
+_CHUNK_COLUMNS = (
+    DocumentVector.id,
+    DocumentVector.document_id,
+    DocumentVector.text_chunk,
+)
+
+
+@dataclass(frozen=True)
+class RetrievedChunk:
+    id: int
+    document_id: str
+    text_chunk: str
+
+
+def _rows_to_chunks(rows) -> List[RetrievedChunk]:
+    return [
+        RetrievedChunk(id=row.id, document_id=row.document_id, text_chunk=row.text_chunk)
+        for row in rows
+    ]
+
+
+def _vector_similarity_search(
+    db: Session,
+    user_id: str,
+    query_vec: List[float],
+    target_doc_ids: List[str],
+    limit: int = VECTOR_TOP_K,
+) -> List[RetrievedChunk]:
+    """Filter by user_id first, then cosine distance (<=>), return top-k without loading embeddings."""
+    stmt = (
+        select(*_CHUNK_COLUMNS)
+        .where(DocumentVector.user_id == user_id)
+        .where(DocumentVector.embedding.isnot(None))
+    )
+    if target_doc_ids:
+        stmt = stmt.where(DocumentVector.document_id.in_(target_doc_ids))
+    stmt = stmt.order_by(DocumentVector.embedding.cosine_distance(query_vec)).limit(limit)
+    return _rows_to_chunks(db.execute(stmt).all())
+
+
+def _fetch_user_chunks(
+    db: Session,
+    user_id: str,
+    target_doc_ids: List[str],
+    *,
+    order_by_id: bool = False,
+    limit: Optional[int] = None,
+) -> List[RetrievedChunk]:
+    """Fetch id/document_id/text_chunk only — never loads the embedding column."""
+    stmt = select(*_CHUNK_COLUMNS).where(DocumentVector.user_id == user_id)
+    if target_doc_ids:
+        stmt = stmt.where(DocumentVector.document_id.in_(target_doc_ids))
+    if order_by_id:
+        stmt = stmt.order_by(DocumentVector.id.asc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    return _rows_to_chunks(db.execute(stmt).all())
+
+
+def _keyword_search_chunks(
+    db: Session,
+    user_id: str,
+    target_doc_ids: List[str],
+    keywords: List[str],
+    per_keyword_limit: int = 150,
+) -> List[RetrievedChunk]:
+    """ILIKE keyword lookup scoped to user_id; returns text columns only."""
+    candidate_chunks: Dict[int, RetrievedChunk] = {}
+    for kw in keywords[:8]:
+        kw_spaced = kw.replace("-", " ")
+        kw_stmt = (
+            select(*_CHUNK_COLUMNS)
+            .where(DocumentVector.user_id == user_id)
+            .where(
+                or_(
+                    DocumentVector.text_chunk.ilike(f"%{kw}%"),
+                    DocumentVector.text_chunk.ilike(f"%{kw_spaced}%"),
+                )
+            )
+        )
+        if target_doc_ids:
+            kw_stmt = kw_stmt.where(DocumentVector.document_id.in_(target_doc_ids))
+        kw_stmt = kw_stmt.limit(per_keyword_limit)
+        for row in db.execute(kw_stmt).all():
+            if row.id not in candidate_chunks:
+                candidate_chunks[row.id] = RetrievedChunk(
+                    id=row.id,
+                    document_id=row.document_id,
+                    text_chunk=row.text_chunk,
+                )
+    return list(candidate_chunks.values())
 
 # Stop words excluded when extracting keywords from the user query
 _STOP_WORDS = {
@@ -94,14 +189,14 @@ def get_headers_for_doc(db: Session, document_id: str) -> list:
         return _DOC_HEADERS[document_id]
         
     stmt = (
-        select(DocumentVector)
+        select(DocumentVector.text_chunk)
         .where(DocumentVector.document_id == document_id)
         .order_by(DocumentVector.id.asc())
         .limit(1)
     )
-    first_vector = db.execute(stmt).scalars().first()
-    if first_vector:
-        lines = first_vector.text_chunk.strip().split("\n")
+    text_chunk = db.execute(stmt).scalar_one_or_none()
+    if text_chunk:
+        lines = text_chunk.strip().split("\n")
         for line in lines:
             stripped = line.strip()
             if stripped.startswith("|") and "---" not in stripped:
@@ -180,14 +275,12 @@ class ChatRequest(BaseModel):
     # Each entry is {"role": "user"|"assistant", "content": str}
     history: Optional[List[dict]] = None
 
-@router.post("/chat")
-async def chat_endpoint(
-    payload: ChatRequest,
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user_id: str = Depends(get_current_user_id),
-):
+def _execute_chat(payload: ChatRequest, request: Request) -> Dict[str, Any]:
+    """Blocking RAG pipeline: auth, embed, retrieve, and build LLM messages."""
+    db = SessionLocal()
     try:
+        current_user_id = resolve_user_id(request, db)
+
         # Build an effective query by merging recent user messages with the current one.
         # This lets retrieval and keyword extraction understand follow-up questions.
         history_user_msgs = []
@@ -221,14 +314,15 @@ async def chat_endpoint(
         if payload.document_id:
             target_doc_ids.append(payload.document_id)
 
-        # Count total vectors for these documents
+        # Count total vectors for these documents (no row hydration)
         count_stmt = (
-            select(DocumentVector.id)
+            select(func.count())
+            .select_from(DocumentVector)
             .where(DocumentVector.user_id == current_user_id)
         )
         if target_doc_ids:
             count_stmt = count_stmt.where(DocumentVector.document_id.in_(target_doc_ids))
-        total_chunks = len(db.execute(count_stmt).scalars().all())
+        total_chunks = db.execute(count_stmt).scalar_one()
 
         # Changed threshold: Only use full context if the file is very small (< 50 chunks).
         # This prevents the 131k token limit error for wide/long spreadsheets.
@@ -236,62 +330,37 @@ async def chat_endpoint(
 
         if is_full_context:
             # ── Full context: retrieve ALL chunks in original sequence order ─────
-            stmt = (
-                select(DocumentVector)
-                .where(DocumentVector.user_id == current_user_id)
+            results = _fetch_user_chunks(
+                db,
+                current_user_id,
+                target_doc_ids,
+                order_by_id=True,
             )
-            if target_doc_ids:
-                stmt = stmt.where(DocumentVector.document_id.in_(target_doc_ids))
-            stmt = stmt.order_by(DocumentVector.id.asc())
-            results: List[DocumentVector] = db.execute(stmt).scalars().all()
             print(f"[chat] Full context: retrieved all {len(results)} chunks")
 
         else:
             # ── Hybrid retrieval for documents > 50 chunks ───────────
-            # Step 1: Cosine similarity — top 60 for broader coverage
-            sim_stmt = (
-                select(DocumentVector)
-                .where(DocumentVector.user_id == current_user_id)
+            # Step 1: user_id filter → cosine distance (<=>) → top 5 only
+            sim_results = _vector_similarity_search(
+                db,
+                current_user_id,
+                query_vec,
+                target_doc_ids,
+                limit=VECTOR_TOP_K,
             )
-            if target_doc_ids:
-                sim_stmt = sim_stmt.where(DocumentVector.document_id.in_(target_doc_ids))
-            sim_stmt = (
-                sim_stmt
-                .order_by(DocumentVector.embedding.cosine_distance(query_vec))
-                .limit(60)
-            )
-            sim_results: List[DocumentVector] = db.execute(sim_stmt).scalars().all()
 
             # Step 2: Keyword ILIKE filter — finds chunks that literally contain key terms
-            # Keywords already computed above (entity_keywords, keywords)
-            candidate_chunks = {}
-            # Use entity_keywords for db lookup to avoid pulling junk chunks
             search_keywords = entity_keywords if entity_keywords else keywords
-            from sqlalchemy import or_
-            for kw in search_keywords[:8]:          # limit to top 8 keywords for safety
-                kw_spaced = kw.replace("-", " ")
-                kw_stmt = (
-                    select(DocumentVector)
-                    .where(DocumentVector.user_id == current_user_id)
-                    .where(
-                        or_(
-                            DocumentVector.text_chunk.ilike(f"%{kw}%"),
-                            DocumentVector.text_chunk.ilike(f"%{kw_spaced}%")
-                        )
-                    )
-                )
-                if target_doc_ids:
-                    kw_stmt = kw_stmt.where(DocumentVector.document_id.in_(target_doc_ids))
-                
-                # Fetch up to 150 chunks per keyword
-                kw_stmt = kw_stmt.limit(150)
-                for r in db.execute(kw_stmt).scalars().all():
-                    if r.id not in candidate_chunks:
-                        candidate_chunks[r.id] = r
+            kw_candidates = _keyword_search_chunks(
+                db,
+                current_user_id,
+                target_doc_ids,
+                search_keywords,
+            )
 
             # Score each chunk by the count of keywords it contains
             scored_chunks = []
-            for chunk_id, r in candidate_chunks.items():
+            for r in kw_candidates:
                 score = 0
                 chunk_text_lower = r.text_chunk.lower()
                 for kw in search_keywords:
@@ -299,22 +368,20 @@ async def chat_endpoint(
                         score += 1
                 scored_chunks.append((score, r))
 
-            # Sort by score in descending order so chunks matching multiple keywords are at the front
             scored_chunks.sort(key=lambda x: x[0], reverse=True)
             kw_results = [r for score, r in scored_chunks]
 
             # Merge & deduplicate (cosine results first, keyword results appended)
             seen_ids: set = set()
-            merged: List[DocumentVector] = []
+            merged: List[RetrievedChunk] = []
             for r in sim_results + kw_results:
                 if r.id not in seen_ids:
                     seen_ids.add(r.id)
                     merged.append(r)
 
-            # Hard cap total chunks at 250 (roughly 120k tokens)
             results = merged[:250]
             print(
-                f"[chat] Hybrid retrieval: {len(sim_results)} cosine + "
+                f"[chat] Hybrid retrieval: {len(sim_results)} cosine (top {VECTOR_TOP_K}) + "
                 f"{len(kw_results)} keyword (scored) → {len(results)} unique chunks (capped to 250)"
             )
 
@@ -531,9 +598,7 @@ async def chat_endpoint(
                 else:
                     answer = f"There are **{verified_row_count}** matching ATMs."
 
-                def generate_direct():
-                    yield answer
-                return StreamingResponse(generate_direct(), media_type="text/plain; charset=utf-8")
+                return {"mode": "direct", "content": answer}
 
             # ── Extra rules for tabular / spreadsheet context ─────────────────
             if any("|" in r.text_chunk for r in results):
@@ -589,14 +654,6 @@ async def chat_endpoint(
                 "Do NOT answer from general knowledge."
             )
 
-        # ── Initialize LLM and stream response ──────────────────────────────
-        llm = ChatNVIDIA(
-            model="meta/llama-3.3-70b-instruct",
-            nvidia_api_key=os.getenv("NVIDIA_API_KEY"),
-            max_completion_tokens=4096,
-            temperature=0.0,
-        )
-
         # Build LLM messages: system prompt + conversation history + current message
         messages = [SystemMessage(content=system_prompt)]
 
@@ -616,18 +673,47 @@ async def chat_endpoint(
 
         messages.append(HumanMessage(content=payload.message))
 
-        def generate():
-            try:
-                for chunk in llm.stream(messages):
-                    text = chunk.content if hasattr(chunk, "content") else str(chunk)
-                    if text:
-                        yield text
-            except Exception as e:
-                print(f"Streaming error: {e}")
-                yield f"Error: {str(e)}"
-
-        return StreamingResponse(generate(), media_type="text/plain; charset=utf-8")
+        return {"mode": "stream", "messages": messages}
 
     except Exception as e:
         print(f"Chat endpoint error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise
+    finally:
+        db.close()
+
+
+def _stream_llm_chunks(messages: List) -> Iterator[str]:
+    llm = ChatNVIDIA(
+        model="meta/llama-3.3-70b-instruct",
+        nvidia_api_key=os.getenv("NVIDIA_API_KEY"),
+        max_completion_tokens=4096,
+        temperature=0.0,
+    )
+    try:
+        for chunk in llm.stream(messages):
+            text = chunk.content if hasattr(chunk, "content") else str(chunk)
+            if text:
+                yield text
+    except Exception as e:
+        print(f"Streaming error: {e}")
+        yield f"Error: {str(e)}"
+
+
+@router.post("/chat")
+async def chat_endpoint(payload: ChatRequest, request: Request):
+    try:
+        result = await run_in_threadpool(_execute_chat, payload, request)
+    except Exception as e:
+        print(f"Chat endpoint error: {e}")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+    if result["mode"] == "direct":
+        async def generate_direct():
+            yield result["content"]
+
+        return StreamingResponse(generate_direct(), media_type="text/plain; charset=utf-8")
+
+    return StreamingResponse(
+        iterate_in_threadpool(_stream_llm_chunks(result["messages"])),
+        media_type="text/plain; charset=utf-8",
+    )

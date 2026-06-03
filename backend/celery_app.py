@@ -1,5 +1,21 @@
 import os
 from celery import Celery
 
-broker_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
-app = Celery('tasks', broker=broker_url)
+broker_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+app = Celery("tasks", broker=broker_url)
+
+app.conf.update(
+    imports=("tasks",),
+    broker_connection_retry_on_startup=True,
+    broker_pool_limit=int(os.getenv("CELERY_BROKER_POOL_LIMIT", "10")),
+    broker_transport_options={
+        "max_connections": int(os.getenv("REDIS_MAX_CONNECTIONS", "20")),
+        "visibility_timeout": int(os.getenv("CELERY_VISIBILITY_TIMEOUT", "3600")),
+        "socket_keepalive": True,
+        "health_check_interval": int(os.getenv("REDIS_HEALTH_CHECK_INTERVAL", "30")),
+    },
+    worker_prefetch_multiplier=1,
+    task_acks_late=True,
+    task_reject_on_worker_lost=True,
+)
