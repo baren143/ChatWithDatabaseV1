@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -12,6 +13,7 @@ router = APIRouter(
     prefix="/api",
     tags=["upload"],
 )
+logger = logging.getLogger(__name__)
 
 # Configuration
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
@@ -158,13 +160,16 @@ def delete_document(
         if os.path.exists(document.file_path):
             try:
                 os.remove(document.file_path)
-            except Exception as file_err:
-                print(f"[delete] Warning: Failed to delete physical file {document.file_path}: {file_err}")
+            except Exception:
+                logger.exception(
+                    "Failed to delete physical file for document %s", document_id
+                )
 
         # c) Delete document row
         db.delete(document)
         db.commit()
         return {"status": "success", "message": "Document deleted successfully"}
-    except Exception as e:
+    except Exception:
         db.rollback()
-        raise HTTPException(status_code=500, detail=f"Failed to delete document: {e}")
+        logger.exception("Failed to delete document %s", document_id)
+        raise HTTPException(status_code=500, detail="Failed to delete document")

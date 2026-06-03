@@ -1,25 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import os
-from dotenv import load_dotenv
 from sqlalchemy import text
 
+from config import get_allowed_origins
 from database import engine, Base
 from models import User, Document, DocumentVector, ensure_vector_indexes  # noqa: F401 — ensure models are imported so tables are registered
 from routers.upload import router as upload_router
 from routers.chat import router as chat_router
 
-load_dotenv()
-
 app = FastAPI(title="Chat with Database API", version="1.0.0")
 
-# CORS configuration - read from environment variable
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=get_allowed_origins(),
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "O"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 

@@ -6,7 +6,9 @@ from typing import Generator
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://postgres:postgres_password@localhost:5432/chat_db")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL environment variable is required")
 
 engine = create_engine(
     DATABASE_URL,

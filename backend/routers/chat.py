@@ -8,6 +8,7 @@ streams the LLM response back to the client.
 
 import os
 import re
+import logging
 from dataclasses import dataclass
 from typing import Any, Dict, Iterator, List, Optional
 from fastapi import APIRouter, HTTPException, Request
@@ -24,6 +25,8 @@ from pydantic import BaseModel
 from dependencies import resolve_user_id
 
 router = APIRouter(prefix="/api", tags=["chat"])
+logger = logging.getLogger(__name__)
+DEBUG_LOGGING = os.getenv("DEBUG", "").lower() in ("1", "true", "yes")
 
 VECTOR_TOP_K = 5
 _CHUNK_COLUMNS = (
@@ -289,7 +292,8 @@ def _execute_chat(payload: ChatRequest, request: Request) -> Dict[str, Any]:
                 if isinstance(h, dict) and h.get("role") == "user":
                     history_user_msgs.append(h.get("content", ""))
         effective_message = " ".join(history_user_msgs + [payload.message]).strip()
-        print(f"[chat] effective_message: {effective_message[:120]}")
+        if DEBUG_LOGGING:
+            logger.debug("Chat retrieval started (message length=%d)", len(effective_message))
 
         # Extract keywords and entity_keywords early — needed for row filtering in both paths
         normalized_message = normalize_term(effective_message)
@@ -298,7 +302,6 @@ def _execute_chat(payload: ChatRequest, request: Request) -> Dict[str, Any]:
         entity_keywords = [
             w for w in keywords if w not in _GENERIC_WORDS and not w.isdigit()
         ]
-        print(f"[chat] entity_keywords: {entity_keywords}")
 
         # Embed the effective message (richer context for retrieval)
         embedder = NVIDIAEmbeddings(
@@ -336,7 +339,7 @@ def _execute_chat(payload: ChatRequest, request: Request) -> Dict[str, Any]:
                 target_doc_ids,
                 order_by_id=True,
             )
-            print(f"[chat] Full context: retrieved all {len(results)} chunks")
+            logger.info("Full context retrieval: %d chunks", len(results))
 
         else:
             # ── Hybrid retrieval for documents > 50 chunks ───────────
@@ -380,9 +383,12 @@ def _execute_chat(payload: ChatRequest, request: Request) -> Dict[str, Any]:
                     merged.append(r)
 
             results = merged[:250]
-            print(
-                f"[chat] Hybrid retrieval: {len(sim_results)} cosine (top {VECTOR_TOP_K}) + "
-                f"{len(kw_results)} keyword (scored) → {len(results)} unique chunks (capped to 250)"
+            logger.info(
+                "Hybrid retrieval: %d cosine (top %d) + %d keyword → %d unique (cap 250)",
+                len(sim_results),
+                VECTOR_TOP_K,
+                len(kw_results),
+                len(results),
             )
 
         # ── Build system prompt ──────────────────────────────────────────────
@@ -571,7 +577,11 @@ def _execute_chat(payload: ChatRequest, request: Request) -> Dict[str, Any]:
             verified_row_count: Optional[int] = None
             if not is_full_context and grouped_by_doc:
                 verified_row_count = sum(len(d["lines"]) for d in grouped_by_doc.values())
-                print(f"[chat] Python-verified row count: {verified_row_count} | intent: {query_intent}")
+                logger.info(
+                    "Python-verified row count: %d | intent: %s",
+                    verified_row_count,
+                    query_intent,
+                )
 
             # ── If query is purely a count question, answer directly ──────────
             if query_intent == "count" and verified_row_count is not None:
@@ -633,16 +643,16 @@ def _execute_chat(payload: ChatRequest, request: Request) -> Dict[str, Any]:
             # We cap the context string to 350,000 chars for extreme safety.
             MAX_CHARS = 350000
             if len(context) > MAX_CHARS:
-                print(f"[chat] Context string too large ({len(context)} chars). Truncating to {MAX_CHARS} chars.")
+                logger.warning(
+                    "Context truncated from %d to %d characters",
+                    len(context),
+                    MAX_CHARS,
+                )
                 context = context[:MAX_CHARS] + "\n\n...[TRUNCATED DUE TO SIZE LIMITS]..."
 
             system_prompt += f"=== DOCUMENT CONTEXT ===\n{context}\n=== END CONTEXT ==="
-            try:
-                with open("system_prompt_debug.txt", "w", encoding="utf-8") as f:
-                    f.write(system_prompt)
-                print("[chat] Saved system prompt to system_prompt_debug.txt")
-            except Exception as debug_err:
-                print(f"[chat] Error saving debug prompt: {debug_err}")
+            if DEBUG_LOGGING:
+                logger.debug("System prompt length: %d characters", len(system_prompt))
 
         else:
             system_prompt = (
@@ -675,8 +685,8 @@ def _execute_chat(payload: ChatRequest, request: Request) -> Dict[str, Any]:
 
         return {"mode": "stream", "messages": messages}
 
-    except Exception as e:
-        print(f"Chat endpoint error: {e}")
+    except Exception:
+        logger.exception("Chat pipeline failed")
         raise
     finally:
         db.close()
@@ -694,18 +704,18 @@ def _stream_llm_chunks(messages: List) -> Iterator[str]:
             text = chunk.content if hasattr(chunk, "content") else str(chunk)
             if text:
                 yield text
-    except Exception as e:
-        print(f"Streaming error: {e}")
-        yield f"Error: {str(e)}"
+    except Exception:
+        logger.exception("LLM streaming failed")
+        yield "Error: Unable to generate a response. Please try again."
 
 
 @router.post("/chat")
 async def chat_endpoint(payload: ChatRequest, request: Request):
     try:
         result = await run_in_threadpool(_execute_chat, payload, request)
-    except Exception as e:
-        print(f"Chat endpoint error: {e}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    except Exception:
+        logger.exception("Chat endpoint failed")
+        raise HTTPException(status_code=500, detail="Internal server error") from None
 
     if result["mode"] == "direct":
         async def generate_direct():

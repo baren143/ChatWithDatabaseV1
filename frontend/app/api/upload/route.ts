@@ -1,3 +1,5 @@
+import { getBackendUrl } from "@/lib/backend-url";
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -7,26 +9,31 @@ export async function POST(request: Request) {
       return new Response("No file provided", { status: 400 });
     }
 
-    // Forward to backend
+    let apiUrl: string;
+    try {
+      apiUrl = getBackendUrl();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Backend URL is not configured" }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
     const backendFormData = new FormData();
     backendFormData.append("file", file);
 
     let response: Response;
     try {
-      response = await fetch("http://localhost:8000/api/upload", {
+      response = await fetch(`${apiUrl}/api/upload`, {
         method: "POST",
         headers: {
           "X-User-Id": "test_user_123",
         },
         body: backendFormData,
       });
-    } catch (networkErr) {
-      // Backend is not reachable (e.g. uvicorn not running)
-      console.error("Cannot reach backend:", networkErr);
+    } catch {
       return new Response(
-        JSON.stringify({
-          error: "Backend server is not running. Please start the FastAPI server on port 8000.",
-        }),
+        JSON.stringify({ error: "Backend server is not reachable." }),
         { status: 503, headers: { "Content-Type": "application/json" } }
       );
     }
@@ -41,8 +48,7 @@ export async function POST(request: Request) {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  } catch (error) {
-    console.error("Upload API error:", error);
-    return new Response(`Error: ${String(error)}`, { status: 500 });
+  } catch {
+    return new Response("Upload request failed", { status: 500 });
   }
 }
