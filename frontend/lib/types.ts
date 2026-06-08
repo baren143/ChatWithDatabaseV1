@@ -43,3 +43,19 @@ export const STATUS_STYLES: Record<
     borderColor: "rgba(248, 113, 113, 0.25)",
   },
 };
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: string;
+}
+
+export interface UserResponse {
+  id: string;
+  email: string;
+  full_name?: string;
+  subscription_status?: string;
+  is_active?: boolean;
+  created_at?: string;
+}

@@ -1,6 +1,7 @@
-"use client";
+'use client';
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from '@/context/AuthContext';
 import type { DocStatus, UploadedDoc } from "@/lib/types";
 import type { ToastType } from "@/components/Toast";
 
@@ -23,6 +24,7 @@ function mapDocFromApi(d: {
 }
 
 export function useDocuments(showToast: ShowToast) {
+  const { token } = useAuth();
   const [uploadedDocs, setUploadedDocs] = useState<UploadedDoc[]>([]);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -41,7 +43,11 @@ export function useDocuments(showToast: ShowToast) {
 
       pollingRef.current[docId] = setInterval(async () => {
         try {
-          const res = await fetch(`/api/documents/${docId}`);
+          const res = await fetch(`/api/documents/${docId}`, {
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
           if (!res.ok) return;
 
           const data = await res.json();
@@ -76,7 +82,7 @@ export function useDocuments(showToast: ShowToast) {
         }
       }, 3000);
     },
-    [showToast, stopPolling]
+    [showToast, stopPolling, token]
   );
 
   useEffect(() => {
@@ -84,7 +90,12 @@ export function useDocuments(showToast: ShowToast) {
 
     async function fetchDocs() {
       try {
-        const res = await fetch("/api/documents", { signal: abortController.signal });
+        const res = await fetch("/api/documents", {
+          signal: abortController.signal,
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
         if (!res.ok) {
           showToast(
             `Could not load documents (${res.status}). Check that the backend is running.`,
@@ -118,7 +129,7 @@ export function useDocuments(showToast: ShowToast) {
       Object.values(pollingRef.current).forEach(clearInterval);
       pollingRef.current = {};
     };
-  }, [showToast, startPolling]);
+  }, [showToast, startPolling, token]);
 
   const handleToggleDoc = useCallback((docId: string) => {
     setSelectedDocIds((prev) =>
@@ -143,7 +154,13 @@ export function useDocuments(showToast: ShowToast) {
         form.append("file", file);
 
         try {
-          const res = await fetch("/api/upload", { method: "POST", body: form });
+          const res = await fetch("/api/upload", {
+            method: "POST",
+            body: form,
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          });
 
           if (res.ok) {
             const data = await res.json();
@@ -176,7 +193,7 @@ export function useDocuments(showToast: ShowToast) {
 
       e.target.value = "";
     },
-    [showToast, startPolling]
+    [showToast, startPolling, token]
   );
 
   const handleRemoveDoc = useCallback(
@@ -186,7 +203,12 @@ export function useDocuments(showToast: ShowToast) {
       setUploadedDocs((prev) => prev.filter((d) => d.id !== docId));
 
       try {
-        const res = await fetch(`/api/documents/${docId}`, { method: "DELETE" });
+        const res = await fetch(`/api/documents/${docId}`, {
+          method: "DELETE",
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
         if (!res.ok) {
           showToast(`Failed to delete document (${res.status}).`, "error");
         }
@@ -195,7 +217,7 @@ export function useDocuments(showToast: ShowToast) {
         showToast("Could not delete the document. Please try again.", "error");
       }
     },
-    [showToast, stopPolling]
+    [showToast, stopPolling, token]
   );
 
   return {

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -16,18 +16,27 @@
   --text-secondary: #9ca3af;
 }
 
+.brand-home-link {
+  transition: background 0.2s ease-in-out, border-color 0.2s ease-in-out, transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.brand-home-link:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08);
+}
+
 body {
   margin: 0;
   padding: 0;
   background-color: var(--bg-obsidian);
   color: var(--text-primary);
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
-  overflow: hidden;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   /* Fix for mobile browser address bar */
-  height: 100vh;
-  height: 100dvh;
-  /* Ensure no overflow from padding/margin */
+  min-height: 100vh;
   box-sizing: border-box;
 }
 
@@ -117,9 +126,10 @@ body {
 
 .app-layout {
   display: flex;
+  position: fixed;
+  inset: 0;
   height: 100vh;
   height: 100dvh;
-  position: relative;
   overflow: hidden;
   background-color: var(--bg-obsidian);
   /* Ensure proper flex sizing */
@@ -132,13 +142,13 @@ body {
   background: var(--bg-sidebar);
   backdrop-filter: blur(20px);
   border-right: 1px solid var(--border-neon);
-  padding: 1.5rem;
+  padding: 1.5rem 1.5rem 1rem 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
   z-index: 10;
   height: 100%;
-  overflow-y: auto;
+  overflow: hidden;
   /* Prevent sidebar from causing overflow */
   box-sizing: border-box;
 }

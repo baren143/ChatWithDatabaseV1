@@ -1,6 +1,6 @@
 import { getBackendUrl } from "@/lib/backend-url";
 
-export async function GET() {
+export async function GET(request: Request) {
   let apiUrl: string;
   try {
     apiUrl = getBackendUrl();
@@ -11,10 +11,16 @@ export async function GET() {
     );
   }
 
+  // Forward the Authorization header from the incoming request
+  const authHeader = request.headers.get("Authorization");
+
   let response: Response;
   try {
     response = await fetch(`${apiUrl}/api/documents`, {
-      headers: { "X-User-Id": "test_user_123" },
+      headers: {
+        // Forward the Authorization header if present
+        ...(authHeader ? { "Authorization": authHeader } : {}),
+      },
     });
   } catch {
     return new Response(

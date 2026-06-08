@@ -2,6 +2,7 @@
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ToastProvider, useToast } from "@/components/Toast";
+import { AuthProvider } from "@/context/AuthContext";
 import type { ReactNode } from "react";
 
 function ErrorBoundaryWithToast({ children }: { children: ReactNode }) {
@@ -20,7 +21,9 @@ function ErrorBoundaryWithToast({ children }: { children: ReactNode }) {
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
     <ToastProvider>
-      <ErrorBoundaryWithToast>{children}</ErrorBoundaryWithToast>
+      <AuthProvider>
+        <ErrorBoundaryWithToast>{children}</ErrorBoundaryWithToast>
+      </AuthProvider>
     </ToastProvider>
   );
 }

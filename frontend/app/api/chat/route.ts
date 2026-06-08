@@ -18,15 +18,17 @@ export async function POST(request: Request) {
       return new Response("Backend URL is not configured", { status: 503 });
     }
 
-    const userId = "test_user_123";
-
+    // Forward the Authorization header from the incoming request
+    const authHeader = request.headers.get("Authorization");
+    
     let response: Response;
     try {
       response = await fetch(`${apiUrl}/api/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-User-Id": userId,
+          // Forward the Authorization header if present
+          ...(authHeader ? { "Authorization": authHeader } : {}),
         },
         body: JSON.stringify({ message, document_ids, history }),
       });

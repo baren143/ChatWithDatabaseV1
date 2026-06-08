@@ -11,22 +11,29 @@ import {
 import type { Message, UploadedDoc } from "@/lib/types";
 import type { ToastType } from "@/components/Toast";
 import { ChatMessage } from "@/components/ChatMessage";
+import { useAuth } from "@/context/AuthContext";
 
 interface ChatPanelProps {
   uploadedDocs: UploadedDoc[];
   selectedDocIds: string[];
   showToast: (message: string, type?: ToastType) => void;
+  messages: Message[];
+  setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
+  isLoading: boolean;
+  setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 function ChatPanelComponent({
   uploadedDocs,
   selectedDocIds,
   showToast,
+  messages,
+  setMessages,
+  isLoading,
+  setIsLoading,
 }: ChatPanelProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { token } = useAuth();
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
 
@@ -117,7 +124,7 @@ function ChatPanelComponent({
         m.id === pending.id ? { ...m, content: pending.content } : m
       )
     );
-  }, []);
+  }, [setMessages]);
 
   const scheduleStreamingUpdate = useCallback(
     (assistantId: string, content: string) => {
@@ -181,18 +188,7 @@ function ChatPanelComponent({
     }
   }, [isListening, showToast]);
 
-  const handleNewChat = useCallback(() => {
-    setMessages([]);
-    setInput("");
-    window.speechSynthesis?.cancel();
-  }, []);
 
-  const handleClearHistory = useCallback(() => {
-    setMessages([]);
-    setInput("");
-    setShowClearConfirm(false);
-    window.speechSynthesis?.cancel();
-  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -246,7 +242,10 @@ function ChatPanelComponent({
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           message: userMessage.content,
           document_ids: targetDocIds,
@@ -314,162 +313,7 @@ function ChatPanelComponent({
 
   return (
     <main className="main-chat-view">
-      {showClearConfirm && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 100,
-            background: "rgba(0,0,0,0.55)",
-            backdropFilter: "blur(6px)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            animation: "fadeInUp 0.2s ease",
-          }}
-        >
-          <div
-            style={{
-              background: "rgba(15,20,35,0.95)",
-              border: "1px solid rgba(248,113,113,0.3)",
-              borderRadius: "1.25rem",
-              padding: "2rem 2.25rem",
-              maxWidth: "380px",
-              width: "90%",
-              boxShadow: "0 24px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "1.25rem",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <div
-                style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "50%",
-                  background: "rgba(248,113,113,0.1)",
-                  border: "1px solid rgba(248,113,113,0.3)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#f87171"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="3 6 5 6 21 6" />
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                </svg>
-              </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: "700", color: "#fff" }}>
-                  Clear Chat History?
-                </h3>
-                <p
-                  style={{
-                    margin: "0.25rem 0 0",
-                    fontSize: "0.82rem",
-                    color: "var(--text-secondary)",
-                    lineHeight: "1.45",
-                  }}
-                >
-                  This will remove all {messages.length} messages from this conversation. Your
-                  uploaded documents will not be affected.
-                </p>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end" }}>
-              <button
-                type="button"
-                onClick={() => setShowClearConfirm(false)}
-                style={{
-                  padding: "0.55rem 1.1rem",
-                  background: "rgba(255,255,255,0.04)",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  borderRadius: "0.6rem",
-                  color: "var(--text-secondary)",
-                  fontSize: "0.85rem",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleClearHistory}
-                style={{
-                  padding: "0.55rem 1.1rem",
-                  background: "linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)",
-                  border: "none",
-                  borderRadius: "0.6rem",
-                  color: "white",
-                  fontSize: "0.85rem",
-                  fontWeight: "700",
-                  cursor: "pointer",
-                }}
-              >
-                Clear History
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      <div
-        style={{
-          display: "flex",
-          gap: "0.5rem",
-          marginBottom: "0.75rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <button
-          type="button"
-          onClick={handleNewChat}
-          disabled={messages.length === 0 || isLoading}
-          style={{
-            padding: "0.5rem 0.9rem",
-            background: "rgba(59, 130, 246, 0.08)",
-            border: "1px solid rgba(59, 130, 246, 0.25)",
-            borderRadius: "0.75rem",
-            color: "#60a5fa",
-            opacity: messages.length === 0 || isLoading ? 0.4 : 1,
-            fontSize: "0.82rem",
-            fontWeight: "600",
-            cursor: messages.length === 0 || isLoading ? "not-allowed" : "pointer",
-          }}
-        >
-          New Chat
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowClearConfirm(true)}
-          disabled={messages.length === 0 || isLoading}
-          style={{
-            padding: "0.5rem 0.9rem",
-            background: "rgba(248, 113, 113, 0.06)",
-            border: "1px solid rgba(248, 113, 113, 0.2)",
-            borderRadius: "0.75rem",
-            color: "#f87171",
-            opacity: messages.length === 0 || isLoading ? 0.4 : 1,
-            fontSize: "0.82rem",
-            fontWeight: "600",
-            cursor: messages.length === 0 || isLoading ? "not-allowed" : "pointer",
-          }}
-        >
-          Clear History
-        </button>
-      </div>
 
       <div
         style={{
@@ -488,6 +332,7 @@ function ChatPanelComponent({
             display: "flex",
             flexDirection: "column",
             gap: "1rem",
+            paddingTop: "1.5rem",
             paddingRight: "0.5rem",
           }}
         >

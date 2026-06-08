@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { AppProviders } from "@/components/AppProviders";
+import { Plus_Jakarta_Sans } from "next/font/google";
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Chat with Database",
@@ -14,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className={plusJakartaSans.className}>
         <AppProviders>{children}</AppProviders>
       </body>
     </html>

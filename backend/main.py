@@ -1,29 +1,44 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy import text
 import logging
 
-from config import get_allowed_origins
+from config import get_allowed_origins, get_trusted_hosts
 from database import engine, Base
-from models import User, Document, DocumentVector, ensure_vector_indexes  # noqa: F401
+from models import User, Document, DocumentVector, DocumentRow, ensure_vector_indexes  # noqa: F401
 from routers.upload import router as upload_router
 from routers.chat import router as chat_router
+from routers.auth import router as auth_router
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Chat with Database API", version="1.0.0")
+app = FastAPI(
+    title="Chat with Database API",
+    version="1.0.0",
+    description="RAG-powered document chat with structured row retrieval.",
+)
 
+# ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_allowed_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    expose_headers=["Content-Length"],
+    max_age=600,
 )
 
+# ── Trusted hosts (production hardening) ────────────────────────────────────
+_trusted_hosts = get_trusted_hosts()
+if _trusted_hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_trusted_hosts)
+
+
 @app.on_event("startup")
-def on_startup():
-    """Register pgvector extension and create all tables on application startup."""
+def on_startup() -> None:
+    """Register pgvector extension, create all tables, and build indexes."""
     try:
         with engine.connect() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
@@ -32,20 +47,31 @@ def on_startup():
         ensure_vector_indexes(engine)
         logger.info("Database startup tasks completed successfully")
     except Exception as e:
-        logger.error(f"Database startup error (non-blocking): {e}")
-        # Continue even if database isn't ready - useful for development
+        logger.error("Database startup error (non-blocking): %s", e)
+        # Continue even if database isn't ready — useful for development
+
 
 @app.get("/")
-def read_root():
-    return {"message": "FastAPI Backend is running!"}
+def read_root() -> dict:
+    return {
+        "message": "FastAPI Backend is running!",
+        "version": app.version,
+        "docs": "/docs",
+    }
+
 
 @app.get("/health")
-def health_check():
+def health_check() -> dict:
     return {"status": "healthy"}
 
+
+# ── Routers ──────────────────────────────────────────────────────────────────
+app.include_router(auth_router)
 app.include_router(upload_router)
 app.include_router(chat_router)
 
+
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

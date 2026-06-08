@@ -12,7 +12,7 @@ if not broker_url:
 app = Celery("tasks", broker=broker_url)
 
 app.conf.update(
-    imports=("tasks",),
+    imports=("tasks", "watchdog"),
     broker_connection_retry_on_startup=True,
     broker_pool_limit=int(os.getenv("CELERY_BROKER_POOL_LIMIT", "10")),
     broker_transport_options={
@@ -25,3 +25,6 @@ app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
 )
+
+# Load the watchdog beat schedule (must be imported after `app` is configured)
+import watchdog  # noqa: E402, F401  (registers beat_schedule)

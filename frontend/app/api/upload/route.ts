@@ -22,12 +22,16 @@ export async function POST(request: Request) {
     const backendFormData = new FormData();
     backendFormData.append("file", file);
 
+    // Forward the Authorization header from the incoming request
+    const authHeader = request.headers.get("Authorization");
+
     let response: Response;
     try {
       response = await fetch(`${apiUrl}/api/upload`, {
         method: "POST",
         headers: {
-          "X-User-Id": "test_user_123",
+          // Forward the Authorization header if present
+          ...(authHeader ? { "Authorization": authHeader } : {}),
         },
         body: backendFormData,
       });
