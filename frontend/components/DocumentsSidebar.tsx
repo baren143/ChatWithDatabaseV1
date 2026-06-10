@@ -41,6 +41,9 @@ function DocumentsSidebarComponent({
   const [isDocsExpanded, setIsDocsExpanded] = useState(false);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(true);
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
+  const [docSearch, setDocSearch] = useState("");
+  const [docPage, setDocPage] = useState(0);
+  const DOCS_PER_PAGE = 10;
 
   const { logout } = useAuth();
   const router = useRouter();
@@ -54,6 +57,21 @@ function DocumentsSidebarComponent({
   const processingCount = uploadedDocs.filter(
     (d) => d.status === "uploading" || d.status === "processing"
   ).length;
+
+  // Filter documents by search query
+  const filteredDocs = uploadedDocs.filter((d) =>
+    d.name.toLowerCase().includes(docSearch.toLowerCase())
+  );
+
+  // Paginate filtered documents
+  const totalDocPages = Math.ceil(filteredDocs.length / DOCS_PER_PAGE);
+  const paginatedDocs = filteredDocs.slice(
+    docPage * DOCS_PER_PAGE,
+    (docPage + 1) * DOCS_PER_PAGE
+  );
+
+  // Reset to page 0 when search changes
+  if (docSearch) setDocPage(0);
 
   return (
     <aside className="glass-sidebar">
@@ -291,12 +309,68 @@ function DocumentsSidebarComponent({
           </p>
         )}
 
+        {/* Search documents */}
+        <div style={{ position: "relative", marginTop: "0.75rem" }}>
+          <input
+            type="text"
+            placeholder="Search documents..."
+            value={docSearch}
+            onChange={(e) => setDocSearch(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "0.5rem 0.75rem",
+              paddingLeft: "2rem",
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: "0.6rem",
+              color: "#fff",
+              fontSize: "0.8rem",
+              outline: "none",
+              boxSizing: "border-box",
+            }}
+          />
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="rgba(255,255,255,0.4)"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{ position: "absolute", left: "0.6rem", top: "50%", transform: "translateY(-50%)" }}
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          {docSearch && (
+            <button
+              type="button"
+              onClick={() => setDocSearch("")}
+              style={{
+                position: "absolute",
+                right: "0.5rem",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                color: "rgba(255,255,255,0.4)",
+                cursor: "pointer",
+                fontSize: "1rem",
+                padding: "0 4px",
+              }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+
         <div
           onClick={() => setIsDocsExpanded(!isDocsExpanded)}
           className="accordion-header"
           style={{ marginTop: "1rem" }}
         >
-          <span>Library ({uploadedDocs.length})</span>
+                   <span>Library ({filteredDocs.length}{totalDocPages > 1 ? `, pg ${docPage + 1}/${totalDocPages}` : ""})</span>
           <span>{isDocsExpanded ? "▾" : "▸"}</span>
         </div>
 
@@ -311,7 +385,7 @@ function DocumentsSidebarComponent({
               gap: "0.6rem",
             }}
           >
-            {uploadedDocs.length === 0 ? (
+            {filteredDocs.length === 0 ? (
               <li
                 style={{
                   padding: "1.5rem 1rem",
@@ -323,10 +397,10 @@ function DocumentsSidebarComponent({
                   border: "1px dashed var(--border-neon)",
                 }}
               >
-                No files uploaded yet.
+                {docSearch ? "No documents match your search." : "No files uploaded yet."}
               </li>
             ) : (
-              uploadedDocs.map((doc) => {
+              paginatedDocs.map((doc) => {
                 const s = STATUS_STYLES[doc.status];
                 const isSelected = selectedDocIds.includes(doc.id);
                 return (

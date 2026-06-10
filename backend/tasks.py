@@ -5,6 +5,7 @@ NVIDIA or mock, and persists both vector chunks and (for spreadsheets)
 structured rows in PostgreSQL.
 """
 
+
 from __future__ import annotations
 
 import os
@@ -13,6 +14,7 @@ import time
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from celery_app import app as celery_app
+from sqlalchemy import text as sql_text
 from database import SessionLocal
 from models import Document, DocumentRow, DocumentVector
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -24,7 +26,7 @@ MAX_CHUNKS = 300
 # Per-file hard timeout (seconds). Exceeding marks document as 'error'.
 MAX_PROCESSING_SECONDS = 3600  # 1 hour
 # Batch size for the embedder.
-BATCH_SIZE = 10
+BATCH_SIZE = 50
 MAX_RETRIES = 3
 RETRY_DELAY = 2  # seconds
 # Spreadsheet chunking: number of rows per markdown chunk used for embedding.

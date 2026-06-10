@@ -25,6 +25,8 @@ import re
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from fastapi import APIRouter, HTTPException, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings
@@ -40,6 +42,9 @@ from models import Document, DocumentRow, DocumentVector
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["chat"])
+
+# Rate limiter for chat endpoint
+chat_limiter = Limiter(key_func=get_remote_address)
 
 VECTOR_TOP_K = 8
 MAX_CONTEXT_CHARS = 350_000
@@ -127,6 +132,17 @@ Rules:
   indicate working status (like 'WORKING or NOT', 'Status', 'Active') and filter appropriately.
 - If the question is conversational with no clear filter, return {"filters":[], "intent":"general"}.
 - Do NOT invent column names. Only use what is in the schema.
+
+FOLLOW-UP QUESTIONS (CRITICAL):
+- If the "Previous user questions" section contains a question, the CURRENT question may be a follow-up.
+- When the user asks something like "Nagapattinam?" or "Mumbai?" after a previous question about
+  "non-working ATMs in Pune", interpret it as: "How many non-working ATMs in Nagapattinam?" or
+  "How many non-working ATMs in Mumbai?" — preserve the original intent (working status filter)
+  and apply it to the new location.
+- Short follow-ups like single city names, region names, or partial phrases should ALWAYS be
+  interpreted in the context of the previous question's intent.
+- Only return {"filters":[], "intent":"general"} if the current question is completely
+  unrelated to the previous question AND has no clear filter on its own.
 """
 
 
@@ -652,6 +668,7 @@ def _stream_llm_chunks(messages: Sequence) -> Iterable[str]:
 # ── Endpoint ──────────────────────────────────────────────────────────────────
 
 @router.post("/chat")
+@chat_limiter.limit("30/minute")
 async def chat_endpoint(payload: ChatRequest, request: Request):
     try:
         result = await run_in_threadpool(_execute_chat, payload, request)

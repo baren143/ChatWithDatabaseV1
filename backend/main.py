@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy import text
 import logging
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from config import get_allowed_origins, get_trusted_hosts
 from database import engine, Base
@@ -13,11 +16,18 @@ from routers.auth import router as auth_router
 
 logger = logging.getLogger(__name__)
 
+# Rate limiter - 30 requests per minute per IP for chat endpoint
+limiter = Limiter(key_func=get_remote_address, default_limits=["30/minute"])
+
 app = FastAPI(
     title="Chat with Database API",
     version="1.0.0",
     description="RAG-powered document chat with structured row retrieval.",
 )
+
+# Add slowapi error handler
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 app.add_middleware(
