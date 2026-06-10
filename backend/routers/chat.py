@@ -688,6 +688,40 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
         any(w in user_msg.lower() for w in ["prepare", "generate", "create", "export", "download"])
  )
 
+    # ── Presentation Detection ───────────────────────────────────────────────
+    presentation_trigger_phrases = [
+        "create a presentation", "generate a presentation", "make a presentation",
+        "build a presentation", "prepare a presentation", "a presentation about",
+        "presentation on", "presentation for", "slides about", "create slides",
+        "powerpoint", "pptx", "slide deck",
+    ]
+    is_presentation_request = any(
+        user_msg.lower().startswith(phrase) or
+        user_msg.lower().startswith("can you " + phrase) or
+        user_msg.lower().startswith("could you " + phrase) or
+        user_msg.lower().startswith("please " + phrase) or
+        user_msg.lower().startswith("i want a presentation") or
+        user_msg.lower().startswith("i need a presentation") or
+        ("presentation" in user_msg.lower() or "slides" in user_msg.lower() or "powerpoint" in user_msg.lower())
+    )
+
+    if is_presentation_request and len(user_msg) > 5:
+        try:
+            nl_payload = NLPresentationRequest(
+                prompt=user_msg,
+                document_ids=payload.document_ids if payload.document_ids else None,
+            )
+            from database import SessionLocal
+            db = SessionLocal()
+            try:
+                result = await generate_presentation(nl_payload, request, db)
+                return result
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"NL presentation generation failed, falling back to chat: {e}")
+
+    # ── Report Detection ───────────────────────────────────────────────────
     if is_report_request and len(user_msg) > 5:
         try:
             nl_payload = NLReportRequest(
@@ -695,8 +729,6 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
                 output_format="excel",
                 document_ids=payload.document_ids if payload.document_ids else None,
             )
-            # Forward to the NL report endpoint
-            from fastapi import Depends
             from database import SessionLocal
             db = SessionLocal()
             try:
