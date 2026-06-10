@@ -11,6 +11,7 @@ from config import get_allowed_origins, get_trusted_hosts
 from database import engine, Base
 from models import User, Document, DocumentVector, DocumentRow, ensure_vector_indexes  # noqa: F401
 from routers.upload import router as upload_router
+from routers.reports import router as reports_router
 from routers.chat import router as chat_router
 from routers.auth import router as auth_router
 
@@ -79,6 +80,7 @@ def health_check() -> dict:
 app.include_router(auth_router)
 app.include_router(upload_router)
 app.include_router(chat_router)
+app.include_router(reports_router)
 
 
 if __name__ == "__main__":

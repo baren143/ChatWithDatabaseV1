@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { ChatPanel } from "@/components/ChatPanel";
+import { ReportModal } from "@/components/ReportModal";
 import { DocumentsSidebar } from "@/components/DocumentsSidebar";
 import { useToast } from "@/components/Toast";
 import { useDocuments } from "@/hooks/useDocuments";
@@ -22,6 +23,7 @@ export default function ChatApp() {
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Load threads from localStorage on mount
   useEffect(() => {
@@ -152,7 +154,7 @@ export default function ChatApp() {
         isLoading={isLoading}
       />
 
-      <ChatPanel
+     <ChatPanel
         uploadedDocs={uploadedDocs}
         selectedDocIds={selectedDocIds}
         showToast={showToast}
@@ -160,7 +162,16 @@ export default function ChatApp() {
         setMessages={handleUpdateMessages}
         isLoading={isLoading}
         setIsLoading={setIsLoading}
+        onGenerateReport={() => setShowReportModal(true)}
       />
+
+      {showReportModal && (
+        <ReportModal
+          uploadedDocs={uploadedDocs}
+          onClose={() => setShowReportModal(false)}
+          showToast={showToast}
+        />
+      )}
     </div>
   );
 }

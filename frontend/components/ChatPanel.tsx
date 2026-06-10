@@ -21,6 +21,7 @@ interface ChatPanelProps {
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   isLoading: boolean;
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
+  onGenerateReport?: () => void;
 }
 
 function ChatPanelComponent({
@@ -31,6 +32,7 @@ function ChatPanelComponent({
   setMessages,
   isLoading,
   setIsLoading,
+  onGenerateReport,
 }: ChatPanelProps) {
   const { token } = useAuth();
   const [input, setInput] = useState("");
@@ -411,6 +413,30 @@ function ChatPanelComponent({
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {messages.length > 0 && onGenerateReport && (
+            <div style={{ display: "flex", justifyContent: "flex-start", padding: "0 0.5rem" }}>
+              <button
+                type="button"
+                onClick={onGenerateReport}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "0.4rem",
+                  padding: "0.4rem 0.9rem",
+                  background: "rgba(59,130,246,0.1)",
+                  border: "1px solid rgba(59,130,246,0.25)",
+                  borderRadius: "0.6rem",
+                  color: "#60a5fa",
+                  fontSize: "0.8rem",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                📊 Generate Report
+              </button>
             </div>
           )}
 
