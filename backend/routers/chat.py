@@ -670,6 +670,46 @@ def _stream_llm_chunks(messages: Sequence) -> Iterable[str]:
 @router.post("/chat")
 @chat_limiter.limit("30/minute")
 async def chat_endpoint(payload: ChatRequest, request: Request):
+    # ── Natural Language Report Detection ───────────────────────────────────
+    user_msg = (payload.message or "").strip()
+    report_trigger_phrases = [
+        "generate a report", "prepare a report", "create a report",
+        "download a report", "export a report", "report on",
+        "give me a report", "a report of", "report for",
+    ]
+    is_report_request = any(
+        user_msg.lower().startswith(phrase) or
+        user_msg.lower().startswith("can you " + phrase) or
+        user_msg.lower().startswith("could you " + phrase) or
+        user_msg.lower().startswith("please " + phrase) or
+        user_msg.lower().startswith("i want a report") or
+        user_msg.lower().startswith("i need a report") or
+        ("report") in user_msg.lower() and
+        any(w in user_msg.lower() for w in ["prepare", "generate", "create", "export", "download"])
+ )
+
+    if is_report_request and len(user_msg) > 5:
+        try:
+            nl_payload = NLReportRequest(
+                prompt=user_msg,
+                output_format="excel",
+                document_ids=payload.document_ids if payload.document_ids else None,
+            )
+            # Forward to the NL report endpoint
+            from fastapi import Depends
+            from database import SessionLocal
+            db = SessionLocal()
+            try:
+                result = await generate_report_from_prompt(
+                    nl_payload, request, db
+                )
+                return result
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"NL report generation failed, falling back to chat: {e}")
+ # ── Normal Chat ───────────────────────────────────────────────────────────
+
     try:
         result = await run_in_threadpool(_execute_chat, payload, request)
     except HTTPException:
