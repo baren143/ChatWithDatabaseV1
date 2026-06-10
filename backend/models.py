@@ -83,7 +83,7 @@ class DocumentVector(Base):
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     document_id = Column(String, ForeignKey("documents.id"), nullable=False)
     text_chunk = Column(Text, nullable=False)
-    embedding = Column(Vector(4096), nullable=True)
+    embedding = Column(Vector(1536), nullable=True)
 
     user = relationship("User", back_populates="document_vectors")
     document = relationship("Document", back_populates="vectors")

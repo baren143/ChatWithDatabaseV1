@@ -28,7 +28,7 @@ from starlette.concurrency import run_in_threadpool
 from auth.utils import get_current_user
 from database import get_db
 from dependencies import resolve_user_id_from_request
-from models import Document, DocumentVector, User
+from models import Document, DocumentRow, DocumentVector, User
 from tasks import process_document
 
 logger = logging.getLogger(__name__)
@@ -451,6 +451,7 @@ def delete_document(
         )
 
     # Delete related rows + vectors
+    db.query(DocumentRow).filter(DocumentRow.document_id == document_id).delete()
     db.query(DocumentVector).filter(DocumentVector.document_id == document_id).delete()
     # DocumentRow cascades from Document, but be explicit for safety
     db.query(Document).filter(Document.id == document_id).delete()

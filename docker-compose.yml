@@ -44,7 +44,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY}
       - MOCK_EMBEDDINGS=${MOCK_EMBEDDINGS:-true}
     volumes:
       - ./backend:/app
@@ -64,7 +64,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SECRET_KEY=${SECRET_KEY}
       - MOCK_EMBEDDINGS=${MOCK_EMBEDDINGS:-true}
     volumes:
       - ./backend:/app
@@ -82,7 +82,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://187.127.178.25:8000
       - BACKEND_URL=http://backend:8000
     depends_on:
       - backend

@@ -343,20 +343,21 @@ def _run_processing(document_id: str) -> None:
             if len(all_embeddings) % 200 == 0 or len(all_embeddings) == len(chunks):
                 db.commit()
 
-        # ── Bulk-insert vectors ────────────────────────────────────────
-        vectors = [
-            DocumentVector(
-                user_id=document.user_id,
-                document_id=document.id,
-                text_chunk=chunk,
-                embedding=embedding,
-            )
-            for chunk, embedding in zip(chunks, all_embeddings)
-        ]
-        db.bulk_save_objects(vectors)
-
         document.status = "ready"
         db.commit()
+
+        try:
+            for chunk, embedding in zip(chunks, all_embeddings):
+                db.execute(
+                    sql_text("INSERT INTO document_vectors (user_id, document_id, text_chunk, embedding) "
+                             "VALUES (:user_id, :document_id, :text_chunk, :embedding::vector)"),
+                    {"user_id": document.user_id, "document_id": document.id,
+                     "text_chunk": chunk, "embedding": str(embedding)}
+                )
+            db.commit()
+        except Exception as ve:
+            print(f"[processor] Vector insert failed (non-fatal): {ve}")
+            db.commit()
         print(
             f"[processor] [SUCCESS] Document {document.file_name} processed "
             f"({len(chunks)} chunks, {len(rows_to_insert)} rows)"

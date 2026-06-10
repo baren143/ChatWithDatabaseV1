@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 
 from database import SessionLocal
+from embeddings import get_embedder
 from dependencies import resolve_user_id_from_request
 from models import Document, DocumentRow, DocumentVector
 
@@ -51,7 +52,7 @@ SAMPLE_ROWS_FOR_SCHEMA = 5
 def _llm(max_tokens: int = 4096, temperature: float = 0.0) -> ChatNVIDIA:
     return ChatNVIDIA(
         model="meta/llama-3.3-70b-instruct",
-        nvidia_api_key=os.getenv("NVIDIA_API_KEY"),
+        
         max_completion_tokens=max_tokens,
         temperature=temperature,
     )
@@ -585,9 +586,9 @@ def _execute_chat(payload: ChatRequest, request: Request) -> Dict[str, Any]:
             target_for_vector = non_spreadsheet_doc_ids or spreadsheet_doc_ids
 
         # ── Path 2: Vector + keyword fallback ────────────────────────────────
-        embedder = NVIDIAEmbeddings(
-            model="nvidia/nv-embed-v1",
-            nvidia_api_key=os.getenv("NVIDIA_API_KEY"),
+        embedder = get_embedder(
+            
+            
         )
         query_vec = embedder.embed_query(payload.message)
 

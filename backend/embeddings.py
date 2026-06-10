@@ -29,7 +29,7 @@ class MockNVIDIAEmbeddings:
         import hashlib
         # Deterministic hash-based vector so identical queries return the same vector
         h = hashlib.sha256(text.encode()).hexdigest()
-        return [int(h[i : i + 2], 16) / 255.0 for i in range(0, min(128, len(h)), 2)] + [0.0] * (4096 - 64)
+        return [int(h[i : i + 2], 16) / 255.0 for i in range(0, min(128, len(h)), 2)] + [0.0] * (1536 - 32)
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         return [self.embed_query(t) for t in texts]
