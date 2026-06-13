@@ -99,9 +99,11 @@ def signup(payload: SignupRequest, db: Session = Depends(get_db)) -> TokenRespon
     db.refresh(user)
 
     access_token = create_access_token(user.email)
+    refresh_token = create_refresh_token(user.email)
     logger.info("User signed up: %s", user.email)
     return TokenResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
@@ -126,12 +128,44 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         raise invalid
 
     access_token = create_access_token(user.email)
+    refresh_token = create_refresh_token(user.email)
     logger.info("User logged in: %s", user.email)
     return TokenResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
         expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
     )
 
+
+@router.post("/refresh", response_model=TokenResponse)
+def refresh_token(payload: RefreshTokenRequest, db: Session = Depends(get_db)) -> TokenResponse:
+    """Exchange a valid refresh token for a new access token + new refresh token."""
+    token_data = decode_token(payload.refresh_token)
+    if not token_data or token_data.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token.",
+        )
+    email = token_data.get("sub")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token payload.",
+        )
+    user = get_user_by_email(db, email)
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found or inactive.",
+        )
+
+    new_access = create_access_token(user.email)
+    new_refresh = create_refresh_token(user.email)
+    return TokenResponse(
+        access_token=new_access,
+        refresh_token=new_refresh,
+        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
 
 @router.get("/me", response_model=UserResponse)
 def me(current_user: User = Depends(get_current_user)) -> UserResponse:

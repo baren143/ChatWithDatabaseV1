@@ -44,7 +44,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 REFRESH_TOKEN_EXPIRE_MINUTES = int(os.getenv("REFRESH_TOKEN_EXPIRE_MINUTES", "1440"))
 
 # ⬇️ CHANGED: sha256_crypt → bcrypt (industry standard)
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt primary; sha256_crypt as fallback for migrating old hashes
+pwd_context = CryptContext(
+    schemes=["bcrypt", "sha256_crypt"],
+    deprecated=["sha256_crypt"],
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
@@ -59,6 +63,10 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
     try:
         return pwd_context.verify(plain, hashed)
+    except ValueError as _ve:
+        if "longer than 72 bytes" in str(_ve):
+            return pwd_context.verify(plain[:72], hashed)
+        return False
     except Exception:
         return False
 
@@ -161,3 +169,22 @@ async def get_current_user(
         return user
     finally:
         db.close()
+
+
+def validate_email(email: str) -> str:
+    """Validate and normalize email address."""
+    email = email.strip().lower()
+    if not _EMAIL_RE.match(email):
+        raise ValueError("Invalid email address")
+    if len(email) > 254:
+        raise ValueError("Email too long")
+    return email
+
+
+def validate_password(password: str) -> str:
+    """Validate password meets minimum requirements."""
+    if not isinstance(password, str) or len(password) < 8:
+        raise ValueError("Password must be at least 8 characters")
+    if len(password) > 128:
+        raise ValueError("Password too long")
+    return password
