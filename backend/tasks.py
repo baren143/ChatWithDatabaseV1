@@ -349,14 +349,28 @@ def _run_processing(document_id: str) -> None:
         db.commit()
 
         try:
+            # BATCH insert vectors using bulk_insert_mappings
+            vector_rows = []
             for chunk, embedding in zip(chunks, all_embeddings):
+                vector_rows.append({
+                    "user_id": document.user_id,
+                    "document_id": document.id,
+                    "text_chunk": chunk,
+                    "embedding": str(embedding),
+                })
+                if len(vector_rows) >= 200:
+                    db.execute(
+                        DocumentVector.__table__.insert(),
+                        vector_rows
+                    )
+                    db.commit()
+                    vector_rows = []
+            if vector_rows:
                 db.execute(
-                    sql_text("INSERT INTO document_vectors (user_id, document_id, text_chunk, embedding) "
-                             "VALUES (:user_id, :document_id, :text_chunk, :embedding::vector)"),
-                    {"user_id": document.user_id, "document_id": document.id,
-                     "text_chunk": chunk, "embedding": str(embedding)}
+                    DocumentVector.__table__.insert(),
+                    vector_rows
                 )
-            db.commit()
+                db.commit()
         except Exception as ve:
             print(f"[processor] Vector insert failed (non-fatal): {ve}")
             db.commit()

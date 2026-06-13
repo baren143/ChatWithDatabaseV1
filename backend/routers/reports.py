@@ -6,7 +6,7 @@ import io
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session
 from auth.utils import get_current_user
 from database import get_db
 from models import Document, DocumentRow
+from dependencies import get_current_user_id
+from routers.filters import cell_matches, row_matches_filters, fetch_filtered_rows
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["reports"])
@@ -180,84 +182,10 @@ def _call_llm_for_presentation_plan(
 
 # ── Filter execution ──────────────────────────────────────────────────────────
 
-def _cell_matches(cell_val: Any, operator: str, filter_val: str) -> bool:
-    if cell_val is None:
-        cell_str = ""
-    else:
-        cell_str = str(cell_val)
-
-    cv_lower = cell_str.lower().strip()
-    fv_lower = filter_val.lower().strip()
-
-    if operator == "eq":
-        return cv_lower == fv_lower
-    if operator == "ne":
-        return cv_lower != fv_lower
-    if operator == "contains":
-        return fv_lower in cv_lower
-    if operator == "not_contains":
-        return fv_lower not in cv_lower
-    if operator in ("gt", "lt", "gte", "lte"):
-        try:
-            cv_num = float(cell_str.replace(",", ""))
-            fv_num = float(filter_val.replace(",", ""))
-            if operator == "gt":
-                return cv_num > fv_num
-            if operator == "lt":
-                return cv_num < fv_num
-            if operator == "gte":
-                return cv_num >= fv_num
-            if operator == "lte":
-                return cv_num <= fv_num
-        except ValueError:
-            return False
-    return False
 
 
-def _row_matches_filters(row_values: Dict[str, Any], filters: List[Dict]) -> bool:
-    for f in filters:
-        col = f.get("column", "")
-        operator = f.get("operator", "eq")
-        value = str(f.get("value", ""))
-
-        matched_key = None
-        for k in row_values:
-            if k.lower().strip() == col.lower().strip():
-                matched_key = k
-                break
-
-        if matched_key is None:
-            return False
-
-        if not _cell_matches(row_values[matched_key], operator, value):
-            return False
-
-    return True
 
 
-def _fetch_filtered_rows(
-    db: Session,
-    user_id: str,
-    doc_ids: Sequence[str],
-    filters: Optional[List[Dict]],
-) -> List[Dict[str, Any]]:
-    """Fetch all rows matching filters for the given documents."""
-    stmt = (
-        select(DocumentRow)
-        .where(DocumentRow.user_id == user_id)
-        .where(DocumentRow.document_id.in_(doc_ids))
-        .order_by(DocumentRow.document_id, DocumentRow.row_index)
-    )
-    all_rows = list(db.execute(stmt).scalars().all())
-
-    if not filters:
-        return [r.values or {} for r in all_rows]
-
-    matched = [
-        r for r in all_rows
-        if _row_matches_filters(r.values or {}, filters)
-    ]
-    return [r.values or {} for r in matched]
 
 
 def _group_rows(rows: List[Dict[str, Any]], group_by: str) -> Dict[str, List[Dict]]:
@@ -563,7 +491,7 @@ async def generate_presentation(
 
     # Fetch all rows (no filters — let AI decide what to show)
     doc_ids = [d.id for d in docs]
-    rows = _fetch_filtered_rows(db, user_id, doc_ids, None)
+    rows = fetch_filtered_rows(db, user_id, doc_ids, None)
 
     if not rows:
         rows = [{"note": "No data available"}]

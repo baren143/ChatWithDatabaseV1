@@ -31,7 +31,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_nvidia_ai_endpoints import ChatNVIDIA, NVIDIAEmbeddings
 from pydantic import BaseModel
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 from starlette.concurrency import iterate_in_threadpool, run_in_threadpool
 
@@ -203,63 +203,7 @@ def _llm_generate_filter_plan(
 
 # ── Filter plan execution ─────────────────────────────────────────────────────
 
-def _cell_matches(cell_val: Any, operator: str, filter_val: str) -> bool:
-    """Apply a single filter to one cell value."""
-    if cell_val is None:
-        cell_str = ""
-    else:
-        cell_str = str(cell_val)
-
-    cv_lower = cell_str.lower().strip()
-    fv_lower = filter_val.lower().strip()
-
-    if operator == "eq":
-        return cv_lower == fv_lower
-    if operator == "ne":
-        return cv_lower != fv_lower
-    if operator == "contains":
-        return fv_lower in cv_lower
-    if operator == "not_contains":
-        return fv_lower not in cv_lower
-    if operator in ("gt", "lt", "gte", "lte"):
-        try:
-            cv_num = float(cell_str.replace(",", ""))
-            fv_num = float(filter_val.replace(",", ""))
-            if operator == "gt":
-                return cv_num > fv_num
-            if operator == "lt":
-                return cv_num < fv_num
-            if operator == "gte":
-                return cv_num >= fv_num
-            if operator == "lte":
-                return cv_num <= fv_num
-        except ValueError:
-            return False
-    return False
-
-
-def _row_matches_plan(row_values: Dict[str, Any], filters: List[Dict]) -> bool:
-    """Return True iff a row matches ALL filters in the plan."""
-    for f in filters:
-        col = f.get("column", "")
-        operator = f.get("operator", "eq")
-        value = str(f.get("value", ""))
-
-        # Case-insensitive column lookup
-        matched_key = None
-        for k in row_values:
-            if k.lower().strip() == col.lower().strip():
-                matched_key = k
-                break
-
-        if matched_key is None:
-            # Column not found in this row — treat as non-match
-            return False
-
-        if not _cell_matches(row_values[matched_key], operator, value):
-            return False
-
-    return True
+# (cell_matches and row_matches_filters imported from routers.filters)
 
 
 def _apply_filter_plan(
@@ -285,7 +229,7 @@ def _apply_filter_plan(
     # Apply filters
     matched_rows = [
         r for r in all_rows
-        if _row_matches_plan(r.values or {}, filters)
+        if row_matches_filters(r.values or {}, filters)
     ]
 
     # Count distinct entity IDs when entity_column is specified
@@ -452,6 +396,28 @@ def _keyword_search(
 ) -> List[Any]:
     if not keywords:
         return []
+    
+    # Try FTS index first (much faster than ILIKE)
+    try:
+        from sqlalchemy import inspect as sa_inspect
+        inspector = sa_inspect(db.bind)
+        cols = [c["name"] for c in inspector.get_columns("document_vectors")]
+        if "text_search" in cols:
+            fts_query = func.plainto_tsquery("english", " | ".join(keywords[:8]))
+            stmt = (
+                select(DocumentVector.id, DocumentVector.document_id, DocumentVector.text_chunk)
+                .where(DocumentVector.user_id == user_id)
+                .where(DocumentVector.text_search.op("@@")(fts_query))
+                .order_by(func.ts_rank(DocumentVector.text_search, fts_query).desc())
+            )
+            if doc_ids:
+                stmt = stmt.where(DocumentVector.document_id.in_(doc_ids))
+            stmt = stmt.limit(per_kw_limit)
+            return list(db.execute(stmt).all())
+    except Exception:
+        pass
+    
+    # Fallback to ILIKE
     found: Dict[int, Any] = {}
     for kw in list(keywords)[:8]:
         stmt = (
@@ -466,7 +432,6 @@ def _keyword_search(
             if r.id not in found:
                 found[r.id] = r
     return list(found.values())
-
 
 def _build_vector_context(chunks: Sequence[Any]) -> str:
     parts = [f"[doc={c.document_id}]\n{c.text_chunk}" for c in chunks]

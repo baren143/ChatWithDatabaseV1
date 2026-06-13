@@ -18,7 +18,7 @@ from routers.auth import router as auth_router
 logger = logging.getLogger(__name__)
 
 # Rate limiter - 30 requests per minute per IP for chat endpoint
-limiter = Limiter(key_func=get_remote_address, default_limits=["30/minute"])
+limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="Chat with Database API",

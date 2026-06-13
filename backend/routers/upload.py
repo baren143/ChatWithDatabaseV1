@@ -381,26 +381,36 @@ async def upload_file(
 def list_documents(
     request: Request,
     db: Session = Depends(get_db),
+    skip: int = 0,
+    limit: int = 50,
 ):
     user_id = resolve_user_id_from_request(request, db)
+    total = db.query(Document).filter(Document.user_id == user_id).count()
     docs = (
         db.query(Document)
         .filter(Document.user_id == user_id)
         .order_by(Document.created_at.desc())
+        .offset(skip)
+        .limit(limit)
         .all()
     )
-    return [
-        {
-            "id": d.id,
-            "file_name": d.file_name,
-            "status": d.status,
-            "total_chunks": d.total_chunks or 0,
-            "processed_chunks": d.processed_chunks or 0,
-            "file_size": d.file_size or 0,
-            "created_at": d.created_at.isoformat() if d.created_at else None,
-        }
-        for d in docs
-    ]
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "items": [
+            {
+                "id": d.id,
+                "file_name": d.file_name,
+                "status": d.status,
+                "total_chunks": d.total_chunks or 0,
+                "processed_chunks": d.processed_chunks or 0,
+                "file_size": d.file_size or 0,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+            }
+            for d in docs
+        ],
+    }
 
 
 @router.get("/documents/{document_id}")

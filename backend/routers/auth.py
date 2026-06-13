@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from auth.utils import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     create_access_token,
+    create_refresh_token,
+    decode_token,
     get_current_user,
     get_password_hash,
     get_user_by_email,
@@ -36,6 +38,10 @@ class SignupRequest(BaseModel):
     full_name: Optional[str] = Field(default=None, max_length=120)
 
 
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=1, max_length=128)
@@ -43,6 +49,7 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
     expires_in: int  # seconds
 
