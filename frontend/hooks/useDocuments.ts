@@ -111,8 +111,7 @@ export function useDocuments(showToast: ShowToast) {
         });
       } catch (err) {
         if (abortController.signal.aborted) return;
-        console.error("Failed to load documents:", err);
-        showToast("Could not reach the document service. Please try again.", "error");
+        console.error("Failed to load documents (silent):", err);
       }
     }
 
