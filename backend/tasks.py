@@ -349,7 +349,8 @@ def _run_processing(document_id: str) -> None:
         db.commit()
 
         try:
-            # BATCH insert vectors using bulk_insert_mappings
+            # BATCH insert vectors using raw SQL with ::vector cast
+            from sqlalchemy import text as _sa_text
             vector_rows = []
             for chunk, embedding in zip(chunks, all_embeddings):
                 vector_rows.append({
@@ -360,15 +361,23 @@ def _run_processing(document_id: str) -> None:
                 })
                 if len(vector_rows) >= 200:
                     db.execute(
-                        DocumentVector.__table__.insert(),
-                        vector_rows
+                        _sa_text(
+                            "INSERT INTO document_vectors "
+                            "(user_id, document_id, text_chunk, embedding) "
+                            "VALUES (:user_id, :document_id, :text_chunk, CAST(:embedding AS vector))"
+                        ),
+                        vector_rows,
                     )
                     db.commit()
                     vector_rows = []
             if vector_rows:
                 db.execute(
-                    DocumentVector.__table__.insert(),
-                    vector_rows
+                    _sa_text(
+                        "INSERT INTO document_vectors "
+                        "(user_id, document_id, text_chunk, embedding) "
+                        "VALUES (:user_id, :document_id, :text_chunk, CAST(:embedding AS vector))"
+                    ),
+                    vector_rows,
                 )
                 db.commit()
         except Exception as ve:
