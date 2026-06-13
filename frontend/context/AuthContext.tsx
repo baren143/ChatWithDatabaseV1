@@ -41,7 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -57,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { access_token: accessToken } = data;
       
       // Get user info
-      const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
+      const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -82,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signup = async (email: string, password: string, fullName?: string) => {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/signup`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/signup`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -98,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { access_token: accessToken } = data;
       
       // Get user info
-      const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/me`, {
+      const userResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/me`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
