@@ -321,7 +321,7 @@ function ChatPanelComponent({
 
       
       <div style={{display:"flex", alignItems:"center", gap:"0.75rem", marginBottom:"0.5rem"}}>
-        <button type="button" onClick={onToggleSidebar} className="mobile-menu-btn" aria-label="Toggle menu">
+        <button type="button" onClick={onToggleSidebar} className="mobile-menu-btn" aria-label="Toggle menu" style={{position:"sticky",top:0,zIndex:50}}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="3" y1="6" x2="21" y2="6" />
             <line x1="3" y1="12" x2="21" y2="12" />
