@@ -651,7 +651,8 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
         user_msg.lower().startswith("i need a report") or
         ("report") in user_msg.lower() and
         any(w in user_msg.lower() for w in ["prepare", "generate", "create", "export", "download"])
- )
+        for phrase in report_trigger_phrases
+    )
 
     # ── Presentation Detection ───────────────────────────────────────────────
     presentation_trigger_phrases = [
@@ -668,6 +669,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
         user_msg.lower().startswith("i want a presentation") or
         user_msg.lower().startswith("i need a presentation") or
         ("presentation" in user_msg.lower() or "slides" in user_msg.lower() or "powerpoint" in user_msg.lower())
+        for phrase in presentation_trigger_phrases
     )
 
     if is_presentation_request and len(user_msg) > 5:
