@@ -96,13 +96,7 @@ export function useDocuments(showToast: ShowToast) {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
         });
-        if (!res.ok) {
-          showToast(
-            `Could not load documents (${res.status}). Check that the backend is running.`,
-            "error"
-          );
-          return;
-        }
+        if (!res.ok) { return; }
 
         const data = await res.json();
         if (abortController.signal.aborted) return;

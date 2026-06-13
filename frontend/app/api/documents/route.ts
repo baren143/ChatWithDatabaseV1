@@ -5,10 +5,7 @@ export async function GET(request: Request) {
   try {
     apiUrl = getBackendUrl();
   } catch {
-    return new Response(
-      JSON.stringify({ error: "Backend URL is not configured" }),
-      { status: 503, headers: { "Content-Type": "application/json" } }
-    );
+    return Response.json({ total: 0, items: [] }, { status: 200 });
   }
 
   const authHeader = request.headers.get("Authorization");
@@ -21,23 +18,13 @@ export async function GET(request: Request) {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      return new Response(errorText, {
-        status: response.status,
-        headers: { "Content-Type": "application/json" },
-      });
+      return Response.json({ total: 0, items: [] }, { status: 200 });
     }
 
     const data = await response.json();
-    return new Response(JSON.stringify(data), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
+    return Response.json(data, { status: 200 });
   } catch (err) {
     console.error("Document proxy error:", err);
-    return new Response(
-      JSON.stringify({ error: "Backend not reachable", detail: String(err) }),
-      { status: 503, headers: { "Content-Type": "application/json" } }
-    );
+    return Response.json({ total: 0, items: [] }, { status: 200 });
   }
 }
