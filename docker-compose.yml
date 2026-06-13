@@ -35,7 +35,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.prod
     container_name: saas_backend
     restart: always
     ports:
@@ -57,7 +57,7 @@ services:
   worker:
     build:
       context: ./backend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.prod
     container_name: saas_worker
     restart: always
     environment:
@@ -77,13 +77,19 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev
+      dockerfile: Dockerfile.prod
     container_name: saas_frontend
     restart: always
     ports:
       - "3000:3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=Host(`chat-with-db.com`) || Host(`www.chat-with-db.com`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.frontend.loadbalancer.server.port=3000"
     environment:
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-https://chat-with-db.com}
       - BACKEND_URL=http://backend:8000
     depends_on:
       - backend

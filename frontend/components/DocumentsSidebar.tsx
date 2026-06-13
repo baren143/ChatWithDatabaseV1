@@ -18,6 +18,8 @@ interface DocumentsSidebarProps {
   onSelectThread: (id: string) => void;
   onDeleteThread: (id: string) => void;
   onNewChat: () => void;
+  sidebarOpen: boolean;
+  onToggleSidebar: (open: boolean) => void;
   messages: Message[];
   isLoading: boolean;
 }
@@ -37,6 +39,8 @@ function DocumentsSidebarComponent({
   onNewChat,
   messages,
   isLoading,
+  sidebarOpen,
+  onToggleSidebar,
 }: DocumentsSidebarProps) {
   const [isDocsExpanded, setIsDocsExpanded] = useState(false);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(true);
@@ -74,7 +78,7 @@ function DocumentsSidebarComponent({
   if (docSearch) setDocPage(0);
 
   return (
-    <aside className="glass-sidebar">
+    <aside className={`glass-sidebar ${sidebarOpen ? "open" : ""}`}>
       <Link
         href="/"
         className="brand-home-link"

@@ -22,6 +22,7 @@ export default function ChatApp() {
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
 
@@ -137,7 +138,9 @@ export default function ChatApp() {
       <div className="ambient-glow-1" />
       <div className="ambient-glow-2" />
 
-      <DocumentsSidebar
+      {/* Mobile sidebar backdrop */}
+      {sidebarOpen && <div className="sidebar-backdrop visible" onClick={() => setSidebarOpen(false)} />}
+      <DocumentsSidebar sidebarOpen={sidebarOpen} onToggleSidebar={setSidebarOpen}
         uploadedDocs={uploadedDocs}
         selectedDocIds={selectedDocIds}
         uploadError={uploadError}
@@ -154,7 +157,7 @@ export default function ChatApp() {
         isLoading={isLoading}
       />
 
-     <ChatPanel
+     <ChatPanel onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         uploadedDocs={uploadedDocs}
         selectedDocIds={selectedDocIds}
         showToast={showToast}
