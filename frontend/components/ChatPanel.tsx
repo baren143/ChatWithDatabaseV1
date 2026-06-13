@@ -517,6 +517,20 @@ function ChatPanelComponent({
           {isLoading ? "…" : "Send"}
         </button>
       </form>
+      <button type="button" onClick={onToggleSidebar}
+        style={{
+          position:"fixed", top:10, left:10, zIndex:9999,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          width:44, height:44, borderRadius:"50%", border:"none",
+          background:"linear-gradient(135deg, #3080ff, #8b5cf6)",
+          color:"white", cursor:"pointer", boxShadow:"0 2px 12px rgba(0,0,0,0.4)",
+          fontSize:18
+        }}
+        aria-label="Toggle sidebar">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
     </main>
   );
 }
