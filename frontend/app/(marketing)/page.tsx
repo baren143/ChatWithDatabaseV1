@@ -20,6 +20,7 @@ export default function LandingPage() {
             <Link href="/features" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Features</Link>
             <Link href="/demo" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Interactive Demo</Link>
             <Link href="/tech" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Tech Stack</Link>
+            <Link href="/blog" className="text-sm font-medium text-gray-400 hover:text-white transition-colors">Blog</Link>
           </nav>
           <div className="flex items-center gap-4">
             <Link href="/auth/login" className="text-sm font-semibold text-gray-300 hover:text-white transition-colors px-3 py-2">
