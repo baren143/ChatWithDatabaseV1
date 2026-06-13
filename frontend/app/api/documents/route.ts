@@ -11,27 +11,33 @@ export async function GET(request: Request) {
     );
   }
 
-  // Forward the Authorization header from the incoming request
   const authHeader = request.headers.get("Authorization");
 
-  let response: Response;
   try {
-    response = await fetch(`${apiUrl}/api/documents`, {
+    const response = await fetch(`${apiUrl}/api/documents`, {
       headers: {
-        // Forward the Authorization header if present
         ...(authHeader ? { "Authorization": authHeader } : {}),
       },
     });
-  } catch {
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return new Response(errorText, {
+        status: response.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const data = await response.json();
+    return new Response(JSON.stringify(data), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("Document proxy error:", err);
     return new Response(
-      JSON.stringify({ error: "Backend not reachable" }),
+      JSON.stringify({ error: "Backend not reachable", detail: String(err) }),
       { status: 503, headers: { "Content-Type": "application/json" } }
     );
   }
-
-  const data = await response.json();
-  return new Response(JSON.stringify(data), {
-    status: response.status,
-    headers: { "Content-Type": "application/json" },
-  });
 }
