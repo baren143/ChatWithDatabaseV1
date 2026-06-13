@@ -39,7 +39,7 @@ export const metadata: Metadata = {
     url: siteUrl,
     images: [
       {
-        url: `${siteUrl}/og-image.png`,
+        url: `${siteUrl}/og-image`,
         width: 1200,
         height: 630,
         alt: "ChatWithDB - AI-powered document and database chat",
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     title: "ChatWithDB — Talk to Your Documents & Databases Using AI",
     description:
       "Upload PDFs, CSVs, and Excel files or query databases using natural language. Get instant AI-powered answers with precise citations.",
-    images: [`${siteUrl}/og-image.png`],
+    images: [`${siteUrl}/og-image`],
   },
   robots: {
     index: true,
