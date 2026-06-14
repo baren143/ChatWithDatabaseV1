@@ -54,6 +54,8 @@ services:
       - "8000"  # Exposed only to internal network
     ports:
       - "8000:8000"  # Change to internal only or use reverse proxy
+    volumes:
+      - uploads_data:/app/uploads
     networks:
       - saas_network
     depends_on:
@@ -83,6 +85,8 @@ services:
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - ENVIRONMENT=production
+    volumes:
+      - uploads_data:/app/uploads
     networks:
       - saas_network
     depends_on:
@@ -125,4 +129,6 @@ networks:
 
 volumes:
   postgres_data:
+    driver: local
+  uploads_data:
     driver: local
