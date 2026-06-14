@@ -14,15 +14,19 @@ export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization');
   const body = await request.text();
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (authHeader) {
+    headers['Authorization'] = authHeader;
+  }
+
   let response: Response;
   try {
-    response = await fetch(, {
+    response = await fetch(apiUrl + '/api/reports/generate', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(authHeader ? { Authorization: authHeader } : {}),
-      },
-      body,
+      headers: headers,
+      body: body,
     });
   } catch {
     return new Response(
@@ -38,9 +42,11 @@ export async function POST(request: Request) {
 
   const ct = response.headers.get('Content-Type') || 'application/octet-stream';
   const cd = response.headers.get('Content-Disposition');
-  const headers: Record<string, string> = { 'Content-Type': ct };
-  if (cd) headers['Content-Disposition'] = cd;
+  const respHeaders: Record<string, string> = { 'Content-Type': ct };
+  if (cd) {
+    respHeaders['Content-Disposition'] = cd;
+  }
 
   const data = await response.arrayBuffer();
-  return new Response(data, { status: 200, headers });
+  return new Response(data, { status: 200, headers: respHeaders });
 }

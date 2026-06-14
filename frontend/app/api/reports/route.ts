@@ -11,28 +11,23 @@ export async function POST(request: Request) {
     );
   }
 
-  const url = new URL(request.url);
-  const path = url.pathname.replace('/api/reports', '/api/reports');
-  
+  const path = request.url.replace(/.*\/api\/reports/, '/api/reports');
   const authHeader = request.headers.get('Authorization');
-  const contentType = request.headers.get('Content-Type') || 'application/json';
-  
-  let body: string | FormData;
-  if (contentType.includes('multipart')) {
-    body = await request.formData();
-  } else {
-    body = await request.text();
+  const body = await request.text();
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (authHeader) {
+    headers['Authorization'] = authHeader;
   }
 
   let response: Response;
   try {
-    response = await fetch(, {
-      method: request.method,
-      headers: {
-        'Content-Type': contentType,
-        ...(authHeader ? { Authorization: authHeader } : {}),
-      },
-      body,
+    response = await fetch(apiUrl + path, {
+      method: 'POST',
+      headers: headers,
+      body: body,
     });
   } catch {
     return new Response(
@@ -46,17 +41,13 @@ export async function POST(request: Request) {
     return new Response(errorText, { status: response.status });
   }
 
-  // For file downloads, stream the response directly
-  const responseContentType = response.headers.get('Content-Type') || 'application/octet-stream';
-  const contentDisposition = response.headers.get('Content-Disposition');
-  
-  const headers: Record<string, string> = {
-    'Content-Type': responseContentType,
-  };
-  if (contentDisposition) {
-    headers['Content-Disposition'] = contentDisposition;
+  const ct = response.headers.get('Content-Type') || 'application/octet-stream';
+  const cd = response.headers.get('Content-Disposition');
+  const respHeaders: Record<string, string> = { 'Content-Type': ct };
+  if (cd) {
+    respHeaders['Content-Disposition'] = cd;
   }
 
   const data = await response.arrayBuffer();
-  return new Response(data, { status: 200, headers });
+  return new Response(data, { status: 200, headers: respHeaders });
 }
