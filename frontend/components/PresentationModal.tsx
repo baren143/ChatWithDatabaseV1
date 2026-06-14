@@ -108,7 +108,7 @@ function PresentationModalComponent({ uploadedDocs, onClose, showToast }: Presen
               🎞️ AI Presentation Generator
             </h2>
             <p style={{ margin: "0.3rem 0 0", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-              Describe your presentation in natural language — AI will build the slides
+              Describe your presentation — AI will build data-driven slides with real numbers
             </p>
           </div>
           <button
@@ -164,7 +164,7 @@ function PresentationModalComponent({ uploadedDocs, onClose, showToast }: Presen
               No ready documents available. Upload and process a file first.
             </p>
           ) : (
-            <div style={{ maxHeight: "160px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+            <div style={{ maxHeight: "140px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.4rem" }}>
               {readyDocs.map((doc) => {
                 const isSelected = selectedDocIds.includes(doc.id);
                 return (
@@ -198,7 +198,7 @@ function PresentationModalComponent({ uploadedDocs, onClose, showToast }: Presen
             </div>
           )}
           <p style={{ margin: "0.4rem 0 0", fontSize: "0.7rem", color: "var(--text-secondary)" }}>
-            Leave all unselected to use all ready documents
+            Leave all unselected to analyze all ready documents
           </p>
         </div>
 
@@ -237,7 +237,7 @@ function PresentationModalComponent({ uploadedDocs, onClose, showToast }: Presen
               cursor: isGenerating || !prompt.trim() ? "not-allowed" : "pointer",
             }}
           >
-            {isGenerating ? "Generating..." : "Generate Presentation"}
+            {isGenerating ? "AI is building your slides..." : "Generate Presentation"}
           </button>
         </div>
       </div>
