@@ -417,7 +417,7 @@ async def generate_presentation(
     User says: 'create a presentation about ATM performance in Nagapattinam'
     AI interprets → builds slides → generates .pptx → downloads.
     """
-    user_id = get_current_user(db, request)
+    user_id = get_current_user(request, db)
 
     if not payload.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt is required")
