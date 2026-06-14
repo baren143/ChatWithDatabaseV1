@@ -41,7 +41,7 @@ from dependencies import resolve_user_id_from_request
 from models import Document, DocumentRow, DocumentVector
 
 # NL report and presentation imports (used in chat_endpoint)
-from routers.reports import NLPresentationRequest, ReportRequest, generate_presentation, generate_report
+from routers.reports import PresentationRequest, ReportRequest, generate_presentation, generate_report
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -757,7 +757,7 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
 
     if is_presentation_request and len(user_msg) > 5:
         try:
-            nl_payload = NLPresentationRequest(
+            nl_payload = PresentationRequest(
                 prompt=user_msg,
                 document_ids=payload.document_ids if payload.document_ids else None,
             )
@@ -778,11 +778,9 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
         try:
             from routers.reports import generate_report
             rpt_payload = ReportRequest(
+                prompt=user_msg,
                 document_ids=payload.document_ids,
-                filters=[],
-                group_by=None,
                 output_format="excel",
-                report_title="Report"
             )
             from database import SessionLocal as _Sl
             _db = _Sl()
