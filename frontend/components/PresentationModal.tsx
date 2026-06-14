@@ -3,26 +3,17 @@
 import { memo, useState, useCallback } from "react";
 import type { UploadedDoc } from "@/lib/types";
 
-interface ReportModalProps {
+interface PresentationModalProps {
   uploadedDocs: UploadedDoc[];
   onClose: () => void;
   showToast: (message: string, type?: "success" | "error" | "info") => void;
 }
 
-const STATUS_STYLES: Record<string, { color: string; bg: string; borderColor: string; label: string }> = {
-  ready: { color: "#34d399", bg: "rgba(16, 185, 129, 0.1)", borderColor: "rgba(16, 185, 129, 0.3)", label: "Ready" },
-  processing: { color: "#fbbf24", bg: "rgba(245, 158, 11, 0.1)", borderColor: "rgba(245, 158, 11, 0.3)", label: "Processing" },
-  uploading: { color: "#60a5fa", bg: "rgba(59, 130, 246, 0.1)", borderColor: "rgba(59, 130, 246, 0.3)", label: "Uploading" },
-  error: { color: "#f87171", bg: "rgba(248, 113, 113, 0.1)", borderColor: "rgba(248, 113, 113, 0.3)", label: "Error" },
-};
-
-function ReportModalComponent({ uploadedDocs, onClose, showToast }: ReportModalProps) {
+function PresentationModalComponent({ uploadedDocs, onClose, showToast }: PresentationModalProps) {
   const readyDocs = uploadedDocs.filter((d) => d.status === "ready");
 
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
-  const [reportTitle, setReportTitle] = useState("My Data Report");
-  const [outputFormat, setOutputFormat] = useState<"csv" | "excel" | "pdf">("excel");
-  const [groupBy, setGroupBy] = useState("");
+  const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
 
   const toggleDoc = useCallback((id: string) => {
@@ -32,32 +23,34 @@ function ReportModalComponent({ uploadedDocs, onClose, showToast }: ReportModalP
   }, []);
 
   const handleGenerate = async () => {
-    if (selectedDocIds.length === 0) {
-      showToast("Please select at least one document", "error");
+    if (!prompt.trim()) {
+      showToast("Please describe the presentation you want", "error");
       return;
     }
 
     setIsGenerating(true);
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch("/api/reports/generate", {
+      const response = await fetch("/api/reports/generate-presentation", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          document_ids: selectedDocIds,
-          filters: [],
-          group_by: groupBy || null,
-          output_format: outputFormat,
-          report_title: reportTitle,
+          prompt: prompt.trim(),
+          document_ids: selectedDocIds.length > 0 ? selectedDocIds : null,
         }),
       });
 
       if (!response.ok) {
         const err = await response.text();
-        throw new Error(err);
+        let errMsg = err;
+        try {
+          const parsed = JSON.parse(err);
+          errMsg = parsed.detail || err;
+        } catch { /* use raw text */ }
+        throw new Error(errMsg);
       }
 
       // Download the file
@@ -65,17 +58,17 @@ function ReportModalComponent({ uploadedDocs, onClose, showToast }: ReportModalP
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${reportTitle.replace(/\s+/g, "_")}.${outputFormat === "excel" ? "xlsx" : outputFormat}`;
+      a.download = `presentation_${Date.now()}.pptx`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      showToast("Report generated successfully!", "success");
+      showToast("Presentation generated successfully!", "success");
       onClose();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      showToast(`Failed to generate report: ${message}`, "error");
+      showToast(`Failed to generate presentation: ${message}`, "error");
     } finally {
       setIsGenerating(false);
     }
@@ -106,16 +99,16 @@ function ReportModalComponent({ uploadedDocs, onClose, showToast }: ReportModalP
           maxHeight: "85vh",
           overflowY: "auto",
           boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
- }}
+        }}
       >
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
           <div>
             <h2 style={{ margin: 0, fontSize: "1.2rem", fontWeight: "800", color: "#fff" }}>
-              📊 Generate Report
+              🎞️ AI Presentation Generator
             </h2>
             <p style={{ margin: "0.3rem 0 0", fontSize: "0.8rem", color: "var(--text-secondary)" }}>
-              Export your data as PDF, Excel, or CSV
+              Describe your presentation in natural language — AI will build the slides
             </p>
           </div>
           <button
@@ -135,15 +128,16 @@ function ReportModalComponent({ uploadedDocs, onClose, showToast }: ReportModalP
           </button>
         </div>
 
-        {/* Report Title */}
+        {/* Prompt Input */}
         <div style={{ marginBottom: "1.25rem" }}>
           <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-            Report Title
+            What should the presentation cover?
           </label>
-          <input
-            type="text"
-            value={reportTitle}
-            onChange={(e) => setReportTitle(e.target.value)}
+          <textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="e.g., Create a presentation about ATM performance in Nagapattinam with charts comparing availability and downtime"
+            rows={4}
             style={{
               width: "100%",
               padding: "0.6rem 0.9rem",
@@ -154,14 +148,16 @@ function ReportModalComponent({ uploadedDocs, onClose, showToast }: ReportModalP
               fontSize: "0.9rem",
               outline: "none",
               boxSizing: "border-box",
+              resize: "vertical",
+              fontFamily: "inherit",
             }}
           />
         </div>
 
         {/* Document Selection */}
-        <div style={{ marginBottom: "1.25rem" }}>
+        <div style={{ marginBottom: "1.5rem" }}>
           <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "0.5rem" }}>
-            Select Documents ({selectedDocIds.length} selected)
+            Select Documents ({selectedDocIds.length > 0 ? selectedDocIds.length : "all ready"} selected)
           </label>
           {readyDocs.length === 0 ? (
             <p style={{ fontSize: "0.8rem", color: "var(--text-secondary)", textAlign: "center", padding: "1rem", background: "rgba(255,255,255,0.02)", borderRadius: "0.6rem", border: "1px dashed rgba(255,255,255,0.1)" }}>
@@ -180,8 +176,8 @@ function ReportModalComponent({ uploadedDocs, onClose, showToast }: ReportModalP
                       alignItems: "center",
                       gap: "0.6rem",
                       padding: "0.5rem 0.75rem",
-                      background: isSelected ? "rgba(59,130,246,0.1)" : "rgba(255,255,255,0.02)",
-                      border: `1px solid ${isSelected ? "rgba(59,130,246,0.3)" : "rgba(255,255,255,0.08)"}`,
+                      background: isSelected ? "rgba(139,92,246,0.1)" : "rgba(255,255,255,0.02)",
+                      border: `1px solid ${isSelected ? "rgba(139,92,246,0.3)" : "rgba(255,255,255,0.08)"}`,
                       borderRadius: "0.6rem",
                       cursor: "pointer",
                       transition: "all 0.15s ease",
@@ -191,7 +187,7 @@ function ReportModalComponent({ uploadedDocs, onClose, showToast }: ReportModalP
                       type="checkbox"
                       checked={isSelected}
                       readOnly
-                      style={{ accentColor: "#3b82f6", width: "15px", height: "15px" }}
+                      style={{ accentColor: "#8b5cf6", width: "15px", height: "15px" }}
                     />
                     <span style={{ flex: 1, fontSize: "0.85rem", color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {doc.name}
@@ -201,63 +197,9 @@ function ReportModalComponent({ uploadedDocs, onClose, showToast }: ReportModalP
               })}
             </div>
           )}
-        </div>
-
-        {/* Group By */}
-        <div style={{ marginBottom: "1.25rem" }}>
-          <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "0.4rem" }}>
-            Group By (optional)
-          </label>
-          <input
-            type="text"
-            value={groupBy}
-            onChange={(e) => setGroupBy(e.target.value)}
-            placeholder="e.g., Region, Status, City"
-            style={{
-              width: "100%",
-              padding: "0.6rem 0.9rem",
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "0.6rem",
-              color: "#fff",
-              fontSize: "0.9rem",
-              outline: "none",
-              boxSizing: "border-box",
-            }}
-          />
-          <p style={{ margin: "0.3rem 0 0", fontSize: "0.7rem", color: "var(--text-secondary)" }}>
-            Leave empty to export all data without grouping
+          <p style={{ margin: "0.4rem 0 0", fontSize: "0.7rem", color: "var(--text-secondary)" }}>
+            Leave all unselected to use all ready documents
           </p>
-        </div>
-
-        {/* Output Format */}
-        <div style={{ marginBottom: "1.5rem" }}>
-          <label style={{ display: "block", fontSize: "0.8rem", fontWeight: "600", color: "var(--text-secondary)", marginBottom: "0.5rem" }}>
-            Output Format
-          </label>
-          <div style={{ display: "flex", gap: "0.6rem" }}>
-            {(["csv", "excel", "pdf"] as const).map((fmt) => (
-              <button
-                key={fmt}
-                type="button"
-                onClick={() => setOutputFormat(fmt)}
-                style={{
-                  flex: 1,
-                  padding: "0.6rem",
-                  background: outputFormat === fmt ? "rgba(59,130,246,0.15)" : "rgba(255,255,255,0.03)",
-                  border: `1px solid ${outputFormat === fmt ? "rgba(59,130,246,0.4)" : "rgba(255,255,255,0.1)"}`,
-                  borderRadius: "0.6rem",
-                  color: outputFormat === fmt ? "#60a5fa" : "var(--text-secondary)",
-                  fontSize: "0.85rem",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  textTransform: "uppercase",
-                }}
-              >
-                {fmt === "csv" ? "📄 CSV" : fmt === "excel" ? "📊 Excel" : "📑 PDF"}
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Actions */}
@@ -281,21 +223,21 @@ function ReportModalComponent({ uploadedDocs, onClose, showToast }: ReportModalP
           <button
             type="button"
             onClick={handleGenerate}
-            disabled={isGenerating || selectedDocIds.length === 0}
+            disabled={isGenerating || !prompt.trim()}
             style={{
               padding: "0.65rem 1.5rem",
-              background: isGenerating || selectedDocIds.length === 0
-                ? "rgba(59,130,246,0.3)"
-                : "linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)",
+              background: isGenerating || !prompt.trim()
+                ? "rgba(139,92,246,0.3)"
+                : "linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)",
               border: "none",
               borderRadius: "0.6rem",
               color: "#fff",
               fontSize: "0.9rem",
               fontWeight: "700",
-              cursor: isGenerating || selectedDocIds.length === 0 ? "not-allowed" : "pointer",
+              cursor: isGenerating || !prompt.trim() ? "not-allowed" : "pointer",
             }}
           >
-            {isGenerating ? "Generating..." : "Generate Report"}
+            {isGenerating ? "Generating..." : "Generate Presentation"}
           </button>
         </div>
       </div>
@@ -303,4 +245,4 @@ function ReportModalComponent({ uploadedDocs, onClose, showToast }: ReportModalP
   );
 }
 
-export const ReportModal = memo(ReportModalComponent);
+export const PresentationModal = memo(PresentationModalComponent);

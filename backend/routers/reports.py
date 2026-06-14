@@ -377,7 +377,43 @@ def _generate_pptx(
                             p.font.size = Pt(11)
                             p.font.color.rgb = TEXT_DARK
 
- # Narration / notes
+        # Chart
+        elif content_type == "chart":
+            chart_title = slide_data.get("chart_title", "")
+            chart_labels = slide_data.get("chart_labels", [])
+            chart_values = slide_data.get("chart_values", [])
+
+            if chart_labels and chart_values:
+                try:
+                    from pptx.chart.data import CategoryChartData
+                    chart_data = CategoryChartData()
+                    chart_data.categories = chart_labels
+                    chart_data.add_series(chart_title or "Values", chart_values)
+
+                    chart = slide.shapes.add_chart(
+                        None,  # auto-detect chart type
+                        Inches(0.5), Inches(1.6), Inches(12.3), Inches(4.8),
+                        chart_data
+                    )
+                    chart.chart.has_legend = True
+                    chart.chart.legend.include_in_layout = False
+                    # Style the chart
+                    if chart.chart.has_title:
+                        chart.chart.chart_title.text_frame.paragraphs[0].font.size = Pt(14)
+                except Exception as e:
+                    logger.warning(f"Chart generation fallback: {e}")
+                    # Fallback: show labels/values as bullets
+                    txBox2 = slide.shapes.add_textbox(Inches(0.6), Inches(1.5), Inches(12), Inches(5.5))
+                    tf2 = txBox2.text_frame
+                    tf2.word_wrap = True
+                    for i, (label, value) in enumerate(zip(chart_labels, chart_values)):
+                        p2 = tf2.paragraphs[0] if i == 0 else tf2.add_paragraph()
+                        p2.text = f"• {label}: {value}"
+                        p2.font.size = Pt(18)
+                        p2.font.color.rgb = TEXT_DARK
+                        p2.space_before = Pt(4)
+
+        # Narration / notes
         narration = slide_data.get("narration", "")
         if narration:
             try:

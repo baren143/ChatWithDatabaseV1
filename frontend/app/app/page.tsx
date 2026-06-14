@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ChatPanel } from "@/components/ChatPanel";
 import { ReportModal } from "@/components/ReportModal";
+import { PresentationModal } from "@/components/PresentationModal";
 import { DocumentsSidebar } from "@/components/DocumentsSidebar";
 import { useToast } from "@/components/Toast";
 import { useDocuments } from "@/hooks/useDocuments";
@@ -25,6 +26,7 @@ export default function ChatApp() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
+  const [showPresentationModal, setShowPresentationModal] = useState(false);
 
   // Load threads from localStorage on mount
   useEffect(() => {
@@ -166,12 +168,21 @@ export default function ChatApp() {
         isLoading={isLoading}
         setIsLoading={setIsLoading}
         onGenerateReport={() => setShowReportModal(true)}
+        onGeneratePresentation={() => setShowPresentationModal(true)}
       />
 
       {showReportModal && (
         <ReportModal
           uploadedDocs={uploadedDocs}
           onClose={() => setShowReportModal(false)}
+          showToast={showToast}
+        />
+      )}
+
+      {showPresentationModal && (
+        <PresentationModal
+          uploadedDocs={uploadedDocs}
+          onClose={() => setShowPresentationModal(false)}
           showToast={showToast}
         />
       )}

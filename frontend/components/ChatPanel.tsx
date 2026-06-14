@@ -22,6 +22,7 @@ interface ChatPanelProps {
   isLoading: boolean;
   setIsLoading: React.Dispatch<React.SetStateAction<boolean>>;
   onGenerateReport?: () => void;
+  onGeneratePresentation?: () => void;
   onToggleSidebar: () => void;
 }
 
@@ -34,6 +35,7 @@ function ChatPanelComponent({
   isLoading,
   setIsLoading,
   onGenerateReport,
+  onGeneratePresentation,
   onToggleSidebar,
 }: ChatPanelProps) {
   const { token } = useAuth();
@@ -427,27 +429,50 @@ function ChatPanelComponent({
             </div>
           )}
 
-          {messages.length > 0 && onGenerateReport && (
-            <div style={{ display: "flex", justifyContent: "flex-start", padding: "0 0.5rem" }}>
-              <button
-                type="button"
-                onClick={onGenerateReport}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.4rem",
-                  padding: "0.4rem 0.9rem",
-                  background: "rgba(59,130,246,0.1)",
-                  border: "1px solid rgba(59,130,246,0.25)",
-                  borderRadius: "0.6rem",
-                  color: "#60a5fa",
-                  fontSize: "0.8rem",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                }}
-              >
-                📊 Generate Report
-              </button>
+          {messages.length > 0 && (onGenerateReport || onGeneratePresentation) && (
+            <div style={{ display: "flex", justifyContent: "flex-start", gap: "0.5rem", padding: "0 0.5rem", flexWrap: "wrap" }}>
+              {onGenerateReport && (
+                <button
+                  type="button"
+                  onClick={onGenerateReport}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.4rem 0.9rem",
+                    background: "rgba(59,130,246,0.1)",
+                    border: "1px solid rgba(59,130,246,0.25)",
+                    borderRadius: "0.6rem",
+                    color: "#60a5fa",
+                    fontSize: "0.8rem",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  📊 Generate Report
+                </button>
+              )}
+              {onGeneratePresentation && (
+                <button
+                  type="button"
+                  onClick={onGeneratePresentation}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    padding: "0.4rem 0.9rem",
+                    background: "rgba(139,92,246,0.1)",
+                    border: "1px solid rgba(139,92,246,0.25)",
+                    borderRadius: "0.6rem",
+                    color: "#a78bfa",
+                    fontSize: "0.8rem",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  🎞️ Generate Presentation
+                </button>
+              )}
             </div>
           )}
 
