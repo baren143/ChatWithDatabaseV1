@@ -35,16 +35,29 @@ class MockNVIDIAEmbeddings:
         return [self.embed_query(t) for t in texts]
 
 
+class TruncatedNVIDIAEmbeddings:
+    """Wrapper that truncates NVIDIA embeddings to 1536 dimensions."""
+
+    def __init__(self, **kwargs):
+        from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
+        self._inner = NVIDIAEmbeddings(
+            model=kwargs.get("model", "nvidia/nv-embed-v1"),
+            nvidia_api_key=os.getenv("NVIDIA_API_KEY"),
+        )
+        self._dim = kwargs.get("embedding_dim", 1536)
+
+    def embed_query(self, text):
+        return self._inner.embed_query(text)[:self._dim]
+
+    def embed_documents(self, texts):
+        return [v[:self._dim] for v in self._inner.embed_documents(texts)]
+
+
 def get_embedder(**kwargs):
     """Return either a real NVIDIAEmbeddings instance or a mock."""
     if _use_mock():
         return MockNVIDIAEmbeddings(**kwargs)
-    from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
-    logger.info("Using REAL NVIDIA embeddings")
-    return NVIDIAEmbeddings(
-        model=kwargs.get("model", "nvidia/nv-embed-v1"),
-        nvidia_api_key=os.getenv("NVIDIA_API_KEY"),
-    )
+    return TruncatedNVIDIAEmbeddings(**kwargs)
 
 
 class MockChatNVIDIA:
