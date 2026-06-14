@@ -456,31 +456,22 @@ async def generate_presentation(
     first_doc = docs[0]
     schema: Dict[str, Any] = {}
 
-    if first_doc.schema_ and isinstance(first_doc.schema_, dict):
-        schema = first_doc.schema_
-    elif first_doc.schema_ and isinstance(first_doc.schema_, str):
-        try:
-            schema = json.loads(first_doc.schema_)
-        except Exception:
-            pass
-
-    # If no schema, build from rows
-    if not schema:
-        sample_rows = list(
-            db.execute(
-                select(DocumentRow)
-                .where(DocumentRow.document_id == first_doc.id)
-                .limit(10)
-            ).scalars().all()
-        )
-        if sample_rows:
-            all_keys = set()
-            for r in sample_rows:
-                if r.values:
-                    all_keys.update(r.values.keys())
-            schema["columns"] = list(all_keys)
-            schema["sample_values"] = {}
-            schema["sample_rows"] = [r.values for r in sample_rows if r.values]
+    # Build schema from document rows (always — Document has no schema_ column)
+    sample_rows = list(
+        db.execute(
+            select(DocumentRow)
+            .where(DocumentRow.document_id == first_doc.id)
+            .limit(10)
+        ).scalars().all()
+    )
+    if sample_rows:
+        all_keys = set()
+        for r in sample_rows:
+            if r.values:
+                all_keys.update(r.values.keys())
+        schema["columns"] = list(all_keys)
+        schema["sample_values"] = {}
+        schema["sample_rows"] = [r.values for r in sample_rows if r.values]
 
     # Get conversation history for context
     history: List[Dict[str, str]] = []
