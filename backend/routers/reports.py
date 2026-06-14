@@ -30,6 +30,14 @@ class NLPresentationRequest(BaseModel):
     document_ids: Optional[List[str]] = None
 
 
+class ReportRequest(BaseModel):
+    document_ids: Optional[List[str]] = None
+    filters: List[dict] = []
+    group_by: Optional[str] = None
+    output_format: str = "excel"
+    report_title: str = "Report"
+
+
 _PPTX_SYSTEM_PROMPT = """\
 You are a presentation planning assistant. The user has uploaded spreadsheet documents and wants
 to generate a PowerPoint presentation using natural language.
@@ -513,3 +521,112 @@ async def generate_presentation(
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/reports/generate")
+async def generate_report(
+    payload: ReportRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Generate Excel/CSV/PDF report from filtered spreadsheet data."""
+    user_id = get_current_user_id(request, db)
+    
+    # Find ready documents
+    if payload.document_ids:
+        docs = list(
+            db.execute(
+                select(Document)
+                .where(
+                    and_(
+                        Document.user_id == user_id,
+                        Document.id.in_(payload.document_ids),
+                        Document.status == "ready",
+                    )
+                )
+            ).scalars().all()
+        )
+    else:
+        docs = list(
+            db.execute(
+                select(Document)
+                .where(
+                    and_(
+                        Document.user_id == user_id,
+                        Document.status == "ready",
+                    )
+                )
+            ).scalars().all()
+        )
+    
+    if not docs:
+        raise HTTPException(status_code=404, detail="No ready documents found")
+    
+    doc_ids = [d.id for d in docs]
+    rows = fetch_filtered_rows(db, user_id, doc_ids, payload.filters or None)
+    
+    if not rows:
+        rows = [{"note": "No data matching filters"}]
+    
+    fmt = payload.output_format.lower()
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    title = payload.report_title.replace(" ", "_")
+    
+    if fmt == "csv":
+        import csv
+        buf = io.StringIO()
+        if rows:
+            headers = list(rows[0].keys())
+            writer = csv.DictWriter(buf, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(rows)
+        content = buf.getvalue().encode("utf-8")
+        return StreamingResponse(
+            io.BytesIO(content),
+            media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="{title}_{ts}.csv"'},
+        )
+    
+    elif fmt == "pdf":
+        try:
+            from fpdf import FPDF
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", "B", 14)
+            pdf.cell(0, 10, payload.report_title, ln=True, align="C")
+            pdf.set_font("Arial", "", 10)
+            for row in rows[:500]:
+                line = ", ".join(f"{k}: {v}" for k, v in row.items())
+                pdf.multi_cell(0, 6, line)
+            content = pdf.output()
+            return StreamingResponse(
+                io.BytesIO(content) if isinstance(content, bytes) else io.BytesIO(content.encode("latin-1")),
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'attachment; filename="{title}_{ts}.pdf"'},
+            )
+        except ImportError:
+            raise HTTPException(status_code=501, detail="PDF generation library not installed")
+    
+    else:  # Excel
+        try:
+            import openpyxl
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = payload.report_title[:31]
+            if rows:
+                headers = list(rows[0].keys())
+                for ci, h in enumerate(headers, 1):
+                    ws.cell(row=1, column=ci, value=h)
+                for ri, row in enumerate(rows[:10000], 2):
+                    for ci, h in enumerate(headers, 1):
+                        ws.cell(row=ri, column=ci, value=str(row.get(h, "")))
+            buf = io.BytesIO()
+            wb.save(buf)
+            buf.seek(0)
+            return StreamingResponse(
+                buf,
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f'attachment; filename="{title}_{ts}.xlsx"'},
+            )
+        except ImportError:
+            raise HTTPException(status_code=501, detail="Excel generation library not installed")

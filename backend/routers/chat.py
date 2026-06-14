@@ -41,7 +41,7 @@ from dependencies import resolve_user_id_from_request
 from models import Document, DocumentRow, DocumentVector
 
 # NL report and presentation imports (used in chat_endpoint)
-from routers.reports import NLPresentationRequest, generate_presentation
+from routers.reports import NLPresentationRequest, ReportRequest, generate_presentation, generate_report
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["chat"])
