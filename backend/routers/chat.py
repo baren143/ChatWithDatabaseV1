@@ -40,6 +40,9 @@ from embeddings import get_embedder
 from dependencies import resolve_user_id_from_request
 from models import Document, DocumentRow, DocumentVector
 
+# NL report and presentation imports (used in chat_endpoint)
+from routers.reports import NLPresentationRequest, generate_presentation
+
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -769,22 +772,24 @@ async def chat_endpoint(payload: ChatRequest, request: Request):
             logger.warning(f"NL presentation generation failed, falling back to chat: {e}")
 
     # ── Report Detection ───────────────────────────────────────────────────
-    if is_report_request and len(user_msg) > 5:
+    # For report requests, provide direct data export via the report endpoint
+    # The frontend handles report dialog separately. Here we respond with data.
+    if is_report_request and len(user_msg) > 5 and payload.document_ids:
         try:
-            nl_payload = NLReportRequest(
-                prompt=user_msg,
+            from routers.reports import generate_report
+            rpt_payload = ReportRequest(
+                document_ids=payload.document_ids,
+                filters=[],
+                group_by=None,
                 output_format="excel",
-                document_ids=payload.document_ids if payload.document_ids else None,
+                report_title="Report"
             )
-            from database import SessionLocal
-            db = SessionLocal()
+            from database import SessionLocal as _Sl
+            _db = _Sl()
             try:
-                result = await generate_report_from_prompt(
-                    nl_payload, request, db
-                )
-                return result
+                return await generate_report(rpt_payload, request, _db)
             finally:
-                db.close()
+                _db.close()
         except Exception as e:
             logger.warning(f"NL report generation failed, falling back to chat: {e}")
  # ── Normal Chat ───────────────────────────────────────────────────────────
