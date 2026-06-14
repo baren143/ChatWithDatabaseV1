@@ -68,26 +68,26 @@ def _llm(max_tokens: int = 4096, temperature: float = 0.0) -> ChatNVIDIA:
 def _get_schema_sample(
     db: Session, user_id: str, doc_ids: Sequence[str]
 ) -> Dict[str, Any]:
-    """Return column headers, sample rows, and total row count for the given docs."""
+    """Return column headers, sample rows, total row count, and distinct values per column."""
     if not doc_ids:
-        return {"columns": [], "sample_rows": [], "total_rows": 0}
+        return {"columns": [], "sample_rows": [], "total_rows": 0, "distinct_values": {}}
 
-    stmt = (
-        select(DocumentRow)
-        .where(DocumentRow.user_id == user_id)
-        .where(DocumentRow.document_id.in_(doc_ids))
-        .order_by(DocumentRow.document_id, DocumentRow.row_index)
-        .limit(SAMPLE_ROWS_FOR_SCHEMA)
-    )
-    sample = list(db.execute(stmt).scalars().all())
-
-    # total count
     from sqlalchemy import func as sqlfunc
     total = db.execute(
         select(sqlfunc.count()).select_from(DocumentRow)
         .where(DocumentRow.user_id == user_id)
         .where(DocumentRow.document_id.in_(doc_ids))
     ).scalar() or 0
+
+    # Fetch MORE sample rows (not just first 5) for better LLM context
+    stmt = (
+        select(DocumentRow)
+        .where(DocumentRow.user_id == user_id)
+        .where(DocumentRow.document_id.in_(doc_ids))
+        .order_by(DocumentRow.document_id, DocumentRow.row_index)
+        .limit(30)
+    )
+    sample = list(db.execute(stmt).scalars().all())
 
     columns: List[str] = []
     sample_rows: List[Dict] = []
@@ -99,7 +99,34 @@ def _get_schema_sample(
             columns = list(vals.keys())
         sample_rows.append(vals)
 
-    return {"columns": columns, "sample_rows": sample_rows, "total_rows": total}
+    # Collect distinct values for every column (via Python set on ALL rows)
+    distinct_values: Dict[str, set] = {}
+    all_vals_stmt = (
+        select(DocumentRow.values)
+        .where(DocumentRow.user_id == user_id)
+        .where(DocumentRow.document_id.in_(doc_ids))
+        .limit(5000)
+    )
+    for (vals,) in db.execute(all_vals_stmt).all():
+        if vals:
+            for k, v in vals.items():
+                if k not in distinct_values:
+                    distinct_values[k] = set()
+                st = str(v).strip()
+                if st:
+                    distinct_values[k].add(st)
+
+    distinct_small: Dict[str, List[str]] = {}
+    for col in columns:
+        if col in distinct_values and len(distinct_values[col]) <= 50:
+            distinct_small[col] = sorted(distinct_values[col])
+
+    return {
+        "columns": columns,
+        "sample_rows": sample_rows,
+        "total_rows": total,
+        "distinct_values": distinct_small,
+    }
 
 
 # ── LLM filter-plan generation ───────────────────────────────────────────────
@@ -123,13 +150,19 @@ JSON schema:
 
 Rules:
 - Use EXACT column names from the schema.
-- Match value CASE to the sample data (e.g. if data has 'NOT-WORKING', use 'NOT-WORKING').
+- Look at the DISTINCT VALUES section below. Use EXACT values from there. For example,
+  if distinct values show "NOT-WORKING", use "NOT-WORKING" (not "NOT" or "not working").
+- Match value CASE to the data (e.g. if data has 'NOT-WORKING', use 'NOT-WORKING').
+- If you're UNSURE of the exact value for a filter, use operator "contains" instead of "eq"
+  for safer fuzzy matching. For example, {"column":"Status","operator":"contains","value":"WORKING"}.
 - For "how many ATMs/branches/records..." → set entity_column to the primary-ID column
   (e.g. 'BANKATMID', 'ATM ID', 'Branch Code', 'ID', etc.) so duplicates are not counted.
   If there is no ID column, set entity_column to null (count rows).
 - For filtering by region/city/area → use the region/location column and eq operator.
 - For "not working / broken / down / out of service" → find the column whose values
   indicate working status (like 'WORKING or NOT', 'Status', 'Active') and filter appropriately.
+  Use operator "contains" with value like "NOT" (e.g. {"operator":"contains","value":"NOT"})
+  to match any variant of "NOT-WORKING", "NOT WORKING", "Not-Working", etc.
 - If the question is conversational with no clear filter, return {"filters":[], "intent":"general"}.
 - Do NOT invent column names. Only use what is in the schema.
 
@@ -154,16 +187,17 @@ def _llm_generate_filter_plan(
     """Ask the LLM to produce a filter plan JSON for the given question + schema."""
     columns = schema_info.get("columns", [])
     sample_rows = schema_info.get("sample_rows", [])
+    distinct_values = schema_info.get("distinct_values", {})
     total_rows = schema_info.get("total_rows", 0)
 
     if not columns:
         return {}
 
-    sample_str = json.dumps(sample_rows[:3], indent=2, ensure_ascii=False)
+    sample_str = json.dumps(sample_rows[:8], indent=2, ensure_ascii=False)
     schema_block = (
         f"COLUMNS: {json.dumps(columns)}\n"
         f"TOTAL ROWS IN DATASET: {total_rows}\n"
-        f"SAMPLE ROWS (first {len(sample_rows[:3])}):\n{sample_str}"
+        f"SAMPLE ROWS (first {len(sample_rows[:8])}):\n{sample_str}"
     )
 
     # Include last 2 user turns for follow-up context
