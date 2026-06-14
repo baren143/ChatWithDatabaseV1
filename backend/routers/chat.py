@@ -203,7 +203,53 @@ def _llm_generate_filter_plan(
 
 # ── Filter plan execution ─────────────────────────────────────────────────────
 
-# (cell_matches and row_matches_filters imported from routers.filters)
+def _cell_matches(cell_val, operator, filter_val):
+    if cell_val is None:
+        cell_str = ""
+    else:
+        cell_str = str(cell_val)
+    cv_lower = cell_str.lower().strip()
+    fv_lower = filter_val.lower().strip()
+    if operator == "eq":
+        return cv_lower == fv_lower
+    if operator == "ne":
+        return cv_lower != fv_lower
+    if operator == "contains":
+        return fv_lower in cv_lower
+    if operator == "not_contains":
+        return fv_lower not in cv_lower
+    if operator in ("gt", "lt", "gte", "lte"):
+        try:
+            cv_num = float(cell_str.replace(",", ""))
+            fv_num = float(filter_val.replace(",", ""))
+            if operator == "gt":
+                return cv_num > fv_num
+            if operator == "lt":
+                return cv_num < fv_num
+            if operator == "gte":
+                return cv_num >= fv_num
+            if operator == "lte":
+                return cv_num <= fv_num
+        except ValueError:
+            return False
+    return False
+
+
+def _row_matches_plan(row_values, filters):
+    for f in filters:
+        col = f.get("column", "")
+        operator = f.get("operator", "eq")
+        value = str(f.get("value", ""))
+        matched_key = None
+        for k in row_values:
+            if k.lower().strip() == col.lower().strip():
+                matched_key = k
+                break
+        if matched_key is None:
+            return False
+        if not _cell_matches(row_values[matched_key], operator, value):
+            return False
+    return True
 
 
 def _apply_filter_plan(
@@ -229,7 +275,7 @@ def _apply_filter_plan(
     # Apply filters
     matched_rows = [
         r for r in all_rows
-        if row_matches_filters(r.values or {}, filters)
+        if _row_matches_plan(r.values or {}, filters)
     ]
 
     # Count distinct entity IDs when entity_column is specified
