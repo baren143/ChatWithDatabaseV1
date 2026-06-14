@@ -14,10 +14,9 @@ from pydantic import BaseModel
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
-from auth.utils import get_current_user
 from database import get_db
 from models import Document, DocumentRow
-from dependencies import get_current_user_id
+from dependencies import get_current_user_id, resolve_user_id_from_request
 from routers.filters import cell_matches, row_matches_filters, fetch_filtered_rows
 
 logger = logging.getLogger(__name__)
@@ -417,7 +416,7 @@ async def generate_presentation(
     User says: 'create a presentation about ATM performance in Nagapattinam'
     AI interprets → builds slides → generates .pptx → downloads.
     """
-    user_id = get_current_user(request, db)
+    user_id = resolve_user_id_from_request(request, db)
 
     if not payload.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt is required")
