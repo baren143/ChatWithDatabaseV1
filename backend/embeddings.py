@@ -35,16 +35,39 @@ class MockNVIDIAEmbeddings:
         return [self.embed_query(t) for t in texts]
 
 
+class TruncatedNVIDIAEmbeddings:
+    """Wrapper that truncates NVIDIA embeddings to 1536 dimensions.
+
+    nvidia/nv-embed-v1 returns 4096-dim vectors, but pgvector has a
+    2000-dim limit for ANN indexes. We truncate to 1536 to stay well
+    within that limit and match the document_vectors.embedding column.
+    """
+
+    def __init__(self, **kwargs):
+        from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
+        self._inner = NVIDIAEmbeddings(
+            model=kwargs.get("model", "nvidia/nv-embed-v1"),
+            nvidia_api_key=os.getenv("NVIDIA_API_KEY"),
+        )
+        self._dim = kwargs.get("embedding_dim", 1536)
+        logger.info(
+            "Using REAL NVIDIA embeddings (truncated to %d dims)", self._dim
+        )
+
+    def embed_query(self, text: str):
+        vec = self._inner.embed_query(text)
+        return vec[: self._dim]
+
+    def embed_documents(self, texts):
+        vecs = self._inner.embed_documents(texts)
+        return [v[: self._dim] for v in vecs]
+
+
 def get_embedder(**kwargs):
     """Return either a real NVIDIAEmbeddings instance or a mock."""
     if _use_mock():
         return MockNVIDIAEmbeddings(**kwargs)
-    from langchain_nvidia_ai_endpoints import NVIDIAEmbeddings
-    logger.info("Using REAL NVIDIA embeddings")
-    return NVIDIAEmbeddings(
-        model=kwargs.get("model", "nvidia/nv-embed-v1"),
-        nvidia_api_key=os.getenv("NVIDIA_API_KEY"),
-    )
+    return TruncatedNVIDIAEmbeddings(**kwargs)
 
 
 class MockChatNVIDIA:
