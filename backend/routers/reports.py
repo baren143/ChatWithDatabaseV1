@@ -488,59 +488,120 @@ def _generate_pdf_report(
     plan: Dict[str, Any],
     rows: List[Dict[str, Any]],
 ) -> bytes:
-    """Generate a styled PDF report."""
+    """Generate a styled PDF report using ReportLab."""
     try:
-        from fpdf import FPDF
+        from reportlab.lib import colors
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import inch
+        from reportlab.platypus import (
+            SimpleDocTemplate,
+            Paragraph,
+            Spacer,
+            Table,
+            TableStyle,
+        )
     except ImportError:
         raise HTTPException(status_code=501, detail="PDF library not installed")
 
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        topMargin=0.5 * inch,
+        bottomMargin=0.5 * inch,
+        leftMargin=0.5 * inch,
+        rightMargin=0.5 * inch,
+    )
+
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "Title_Custom",
+        parent=styles["Title"],
+        fontSize=18,
+        textColor=colors.HexColor("#1E3A5F"),
+        spaceAfter=12,
+        alignment=1,  # center
+    )
+    subtitle_style = ParagraphStyle(
+        "Subtitle_Custom",
+        parent=styles["Normal"],
+        fontSize=8,
+        textColor=colors.HexColor("#6B7280"),
+        alignment=1,
+        spaceAfter=16,
+    )
+    summary_style = ParagraphStyle(
+        "Summary_Custom",
+        parent=styles["Normal"],
+        fontSize=10,
+        textColor=colors.HexColor("#374151"),
+        spaceAfter=12,
+    )
+
+    elements: list = []
 
     # Title
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, plan.get("report_title", "Report"), ln=True, align="C")
-    pdf.ln(4)
+    title = plan.get("report_title", "Report")
+    elements.append(Paragraph(title, title_style))
 
-    # Metadata
-    pdf.set_font("Arial", "I", 8)
-    pdf.cell(0, 6, f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}  |  Rows: {len(rows)}", ln=True, align="C")
-    pdf.ln(6)
+    # Metadata line
+    meta_text = (
+        f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}"
+        f" &nbsp;|&nbsp; Rows: {len(rows)}"
+    )
+    elements.append(Paragraph(meta_text, subtitle_style))
 
     # Summary
     if plan.get("summary"):
-        pdf.set_font("Arial", "", 10)
-        pdf.multi_cell(0, 6, plan["summary"])
-        pdf.ln(4)
+        elements.append(Paragraph(plan["summary"], summary_style))
+        elements.append(Spacer(1, 12))
 
     # Data table
     if rows:
-        pdf.set_font("Arial", "B", 9)
         headers = list(rows[0].keys())
-        col_width = 190 / len(headers) if headers else 190
+        header_bg = colors.HexColor("#1E3A5F")
+        header_fg = colors.white
+        row_even_bg = colors.HexColor("#F9FAFB")
+        row_odd_bg = colors.white
+        border_color = colors.HexColor("#D1D5DB")
 
-        # Header row
-        pdf.set_fill_color(30, 58, 95)
-        pdf.set_text_color(255, 255, 255)
-        for h in headers:
-            pdf.cell(col_width, 8, str(h)[:20], border=1, fill=True, align="C")
-        pdf.ln()
+        table_data = [[Paragraph(f"<b>{str(h)[:20]}</b>", styles["Normal"]) for h in headers]]
 
-        # Data rows
-        pdf.set_font("Arial", "", 8)
-        pdf.set_text_color(31, 41, 55)
         for i, row in enumerate(rows[:200]):
-            if i % 2 == 0:
-                pdf.set_fill_color(249, 250, 251)
-            else:
-                pdf.set_fill_color(255, 255, 255)
-            for h in headers:
-                val = str(row.get(h, ""))[:25]
-                pdf.cell(col_width, 6, val, border=1, fill=True, align="L")
-            pdf.ln()
+            table_data.append([
+                str(row.get(h, ""))[:25] for h in headers
+            ])
 
-    return pdf.output()
+        col_widths = [doc.width / len(headers)] * len(headers)
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+
+        style_commands = [
+            ("BACKGROUND", (0, 0), (-1, 0), header_bg),
+            ("TEXTCOLOR", (0, 0), (-1, 0), header_fg),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, 0), 8),
+            ("FONTSIZE", (0, 1), (-1, -1), 7),
+            ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+            ("GRID", (0, 0), (-1, -1), 0.5, border_color),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+        ]
+
+        # Alternating row fills
+        for i in range(1, len(table_data)):
+            bg = row_even_bg if i % 2 == 0 else row_odd_bg
+            style_commands.append(("BACKGROUND", (0, i), (-1, i), bg))
+
+        table.setStyle(TableStyle(style_commands))
+        elements.append(table)
+
+    doc.build(elements)
+    buf.seek(0)
+    return buf.getvalue()
 
 
 # ── CSV report generation ──────────────────────────────────────────────────────
