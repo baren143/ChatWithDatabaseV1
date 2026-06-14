@@ -14,19 +14,19 @@ export async function POST(request: Request) {
   const authHeader = request.headers.get('Authorization');
   const body = await request.text();
 
+  const fwdHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (authHeader) fwdHeaders['Authorization'] = authHeader;
+
   let response: Response;
   try {
-    response = await fetch(, {
+    response = await fetch(apiUrl + '/api/reports/generate-presentation', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(authHeader ? { Authorization: authHeader } : {}),
-      },
+      headers: fwdHeaders,
       body,
     });
   } catch {
     return new Response(
-      JSON.stringify({ error: 'Backend server is not reachable.' }),
+      JSON.stringify({ error: 'Backend is not reachable.' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } }
     );
   }
@@ -38,9 +38,9 @@ export async function POST(request: Request) {
 
   const ct = response.headers.get('Content-Type') || 'application/octet-stream';
   const cd = response.headers.get('Content-Disposition');
-  const headers: Record<string, string> = { 'Content-Type': ct };
-  if (cd) headers['Content-Disposition'] = cd;
+  const out: Record<string, string> = { 'Content-Type': ct };
+  if (cd) out['Content-Disposition'] = cd;
 
   const data = await response.arrayBuffer();
-  return new Response(data, { status: 200, headers });
+  return new Response(data, { status: 200, headers: out });
 }
